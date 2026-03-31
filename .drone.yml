@@ -22,6 +22,9 @@ trigger:
 steps:
   - name: push-amd64
     image: plugins/docker
+    environment:
+      http_proxy: http://192.168.2.3:7890
+      https_proxy: http://192.168.2.3:7890
     settings:
       registry: harbor.zkjgy.online
       repo: harbor.zkjgy.online/library/mqtt-iot-mapper
@@ -61,6 +64,9 @@ trigger:
 steps:
   - name: push-arm64
     image: plugins/docker
+    environment:
+      http_proxy: http://192.168.2.3:7890
+      https_proxy: http://192.168.2.3:7890
     settings:
       registry: harbor.zkjgy.online
       repo: harbor.zkjgy.online/library/mqtt-iot-mapper
@@ -100,6 +106,9 @@ trigger:
 steps:
   - name: manifest-latest
     image: plugins/manifest
+    environment:
+      http_proxy: http://192.168.2.3:7890
+      https_proxy: http://192.168.2.3:7890
     settings:
       username:
         from_secret: harbor_username
@@ -130,6 +139,8 @@ steps:
   - name: helm-package-push
     image: alpine/helm:3.14.0
     environment:
+      http_proxy: http://192.168.2.3:7890
+      https_proxy: http://192.168.2.3:7890
       HARBOR_USERNAME:
         from_secret: harbor_username
       HARBOR_PASSWORD:
