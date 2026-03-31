@@ -1,0 +1,39 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: DeviceModel
+metadata:
+  name: iot-camera-model
+  namespace: default
+spec:
+  protocol: "mqttIot"
+  properties:
+    # ── 可写控制属性 ─────────────────────────────────────────
+    - name: taskControl
+      description: "控制录制任务：1=录制中 / 0=停止录制"
+      type: INT
+      accessMode: ReadWrite
+
+    - name: captureInterval
+      description: "截图/帧采集间隔（秒），须≥1"
+      type: INT
+      accessMode: ReadWrite
+
+    # ── 只读状态属性 ─────────────────────────────────────────
+    - name: recordStatus
+      description: "录制状态：0=离线 / 1=在线空闲 / 2=录制中（只读）"
+      type: INT
+      accessMode: ReadOnly
+
+    - name: streamUrl
+      description: "推流地址（只读，如 rtsp://...）"
+      type: STRING
+      accessMode: ReadOnly
+
+    - name: lastCaptureTime
+      description: "最后截图时间（毫秒时间戳，只读）"
+      type: INT
+      accessMode: ReadOnly
+
+    - name: storageUsed
+      description: "已用存储空间（MB，只读）"
+      type: DOUBLE
+      accessMode: ReadOnly

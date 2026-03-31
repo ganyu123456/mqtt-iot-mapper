@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-iot-mapper
+  namespace: default
+  labels:
+    app: mqtt-iot-mapper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt-iot-mapper
+  template:
+    metadata:
+      labels:
+        app: mqtt-iot-mapper
+    spec:
+      nodeName: cloudedge-edge-02
+      tolerations:
+        - key: node-role.kubernetes.io/edge
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: mapper
+          image: harbor.zkjgy.online/library/mqtt-iot-mapper:latest
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - /kubeedge/main --config-file /tmp/config.yaml --v 4
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          volumeMounts:
+            - name: kubeedge-sock
+              mountPath: /etc/kubeedge
+            - name: mapper-config
+              mountPath: /tmp
+      volumes:
+        - name: kubeedge-sock
+          hostPath:
+            path: /etc/kubeedge
+            type: Directory
+        - name: mapper-config
+          configMap:
+            name: mqtt-iot-mapper-config
+            items:
+              - key: configData
+                path: config.yaml

@@ -1,0 +1,34 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: DeviceModel
+metadata:
+  name: iot-door-access-model
+  namespace: default
+spec:
+  protocol: "mqttIot"
+  properties:
+    # ── 可写控制属性 ─────────────────────────────────────────
+    - name: taskControl
+      description: "控制任务开始或停止（停止后不再采集门禁状态）：1=运行 / 0=停止"
+      type: INT
+      accessMode: ReadWrite
+
+    - name: door1Control1
+      description: "门禁1控制：1=开门 / 0=关门"
+      type: INT
+      accessMode: ReadWrite
+
+    - name: door1Control2
+      description: "门禁2控制：1=开门 / 0=关门"
+      type: INT
+      accessMode: ReadWrite
+
+    # ── 只读状态属性 ─────────────────────────────────────────
+    - name: door1OperateTime1
+      description: "门禁1最后一次操作时间（毫秒时间戳，只读）"
+      type: INT
+      accessMode: ReadOnly
+
+    - name: door1OperateTime2
+      description: "门禁2最后一次操作时间（毫秒时间戳，只读）"
+      type: INT
+      accessMode: ReadOnly

@@ -1,0 +1,142 @@
+---
+kind: pipeline
+name: mqtt-iot-mapper-amd64
+type: docker
+
+platform:
+  os: linux
+  arch: amd64
+
+volumes:
+  - name: docker
+    host:
+      path: /var/run/docker.sock
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - tag
+
+steps:
+  - name: push-amd64
+    image: plugins/docker
+    settings:
+      registry: harbor.zkjgy.online
+      repo: harbor.zkjgy.online/library/mqtt-iot-mapper
+      username:
+        from_secret: harbor_username
+      password:
+        from_secret: harbor_password
+      tags:
+        - linux-amd64
+      dockerfile: Dockerfile
+      context: .
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+
+---
+kind: pipeline
+name: mqtt-iot-mapper-arm64
+type: docker
+
+platform:
+  os: linux
+  arch: arm64
+
+volumes:
+  - name: docker
+    host:
+      path: /var/run/docker.sock
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - tag
+
+steps:
+  - name: push-arm64
+    image: plugins/docker
+    settings:
+      registry: harbor.zkjgy.online
+      repo: harbor.zkjgy.online/library/mqtt-iot-mapper
+      username:
+        from_secret: harbor_username
+      password:
+        from_secret: harbor_password
+      tags:
+        - linux-arm64
+      dockerfile: Dockerfile
+      context: .
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+
+---
+kind: pipeline
+name: mqtt-iot-mapper-manifest
+type: docker
+
+depends_on:
+  - mqtt-iot-mapper-amd64
+  - mqtt-iot-mapper-arm64
+
+volumes:
+  - name: docker
+    host:
+      path: /var/run/docker.sock
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - tag
+
+steps:
+  - name: manifest-latest
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: harbor_username
+      password:
+        from_secret: harbor_password
+      target: harbor.zkjgy.online/library/mqtt-iot-mapper:latest
+      template: harbor.zkjgy.online/library/mqtt-iot-mapper:OS-ARCH
+      platforms:
+        - linux/amd64
+        - linux/arm64
+
+---
+kind: pipeline
+name: mqtt-iot-mapper-helm
+type: docker
+
+depends_on:
+  - mqtt-iot-mapper-manifest
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - tag
+
+steps:
+  - name: helm-package-push
+    image: alpine/helm:3.14.0
+    environment:
+      HARBOR_USERNAME:
+        from_secret: harbor_username
+      HARBOR_PASSWORD:
+        from_secret: harbor_password
+    commands:
+      - helm registry login harbor.zkjgy.online
+          --username $HARBOR_USERNAME
+          --password $HARBOR_PASSWORD
+      - helm package helm/mqtt-iot-mapper --version 0.1.0
+      - helm push mqtt-iot-mapper-0.1.0.tgz oci://harbor.zkjgy.online/library

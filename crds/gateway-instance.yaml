@@ -1,0 +1,81 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: Device
+metadata:
+  name: iot-gateway-001
+  namespace: default
+  annotations:
+    description: "工业网关设备实例，对应 10-gateway-simulator 模拟器"
+spec:
+  deviceModelRef:
+    name: iot-gateway-model
+  nodeName: cloudedge-edge-02
+  protocol:
+    protocolName: mqttIot
+    configData:
+      # 边缘节点 EMQX 地址
+      mqttBroker: "tcp://192.168.122.212:1884"
+      # 设备唯一标识，决定 MQTT 主题：device/gateway-001/status|cmd|data
+      deviceId: "gateway-001"
+      mqttUsername: ""
+      mqttPassword: ""
+      mqttClientId: "mapper-gateway-001"
+      # 可选：将 data 主题数据转发到平台数据面（留空则仅记录日志）
+      dataForwardBroker: ""
+      dataForwardTopic: ""
+
+  properties:
+    # ── 可写属性（mapper 在 desired 变更时向设备下发 cmd）──────
+    - name: taskControl
+      visitors:
+        configData:
+          fieldName: taskControl
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+      desired:
+        value: "1"   # 1=运行
+
+    - name: collectInterval
+      visitors:
+        configData:
+          fieldName: collectInterval
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+      desired:
+        value: "5"   # 初始采集间隔 5s，mapper 启动时下发给设备
+
+    # ── 只读属性（mapper 从 status 主题读取并上报）─────────────
+    - name: collectPointTotal
+      visitors:
+        configData:
+          fieldName: collectPointTotal
+      collectCycle: 30000
+      reportCycle: 30000
+      reportToCloud: true
+
+    - name: collectPointOnline
+      visitors:
+        configData:
+          fieldName: collectPointOnline
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+
+    - name: lastCollectTime
+      visitors:
+        configData:
+          fieldName: lastCollectTime
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+
+  methods:
+    - name: SetTaskControl
+      description: "控制网关任务启停：1=运行 / 0=停止"
+      propertyNames:
+        - taskControl
+    - name: SetCollectInterval
+      description: "动态调整采集间隔（秒）"
+      propertyNames:
+        - collectInterval

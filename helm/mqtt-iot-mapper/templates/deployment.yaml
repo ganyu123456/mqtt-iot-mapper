@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mqtt-iot-mapper.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mqtt-iot-mapper.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mqtt-iot-mapper.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mqtt-iot-mapper.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.nodeName }}
+      nodeName: {{ .Values.nodeName }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      hostNetwork: {{ .Values.hostNetwork }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: mapper
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - /kubeedge/main --config-file /tmp/config.yaml --v {{ .Values.logLevel }}
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+          volumeMounts:
+            - name: kubeedge-sock
+              mountPath: /etc/kubeedge
+            - name: mapper-config
+              mountPath: /tmp
+
+      volumes:
+        - name: kubeedge-sock
+          hostPath:
+            path: /etc/kubeedge
+            type: Directory
+        - name: mapper-config
+          configMap:
+            name: {{ include "mqtt-iot-mapper.configmapName" . }}
+            items:
+              - key: configData
+                path: config.yaml

@@ -1,0 +1,111 @@
+package device
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"k8s.io/klog/v2"
+
+	dmiapi "github.com/kubeedge/api/apis/dmi/v1beta1"
+	"github.com/kubeedge/mapper-framework/pkg/common"
+	"github.com/kubeedge/mapper-framework/pkg/grpcclient"
+	"github.com/kubeedge/mapper-framework/pkg/util/parse"
+	"github.com/kubeedge/mqtt-iot-mapper/driver"
+)
+
+// TwinData holds per-property reporting context.
+type TwinData struct {
+	DeviceName      string
+	DeviceNamespace string
+	Client          *driver.CustomizedClient
+	Name            string
+	Type            string
+	ObservedDesired common.TwinProperty
+	VisitorConfig   *driver.VisitorConfig
+	Topic           string
+	Results         interface{}
+	CollectCycle    time.Duration
+	ReportToCloud   bool
+}
+
+// GetPayLoad reads the property value from the driver and serialises it into a twin-update payload.
+func (td *TwinData) GetPayLoad() ([]byte, error) {
+	var err error
+	td.Results, err = td.Client.GetDeviceData(td.VisitorConfig)
+	if err != nil {
+		return nil, fmt.Errorf("get device data failed: %v", err)
+	}
+	sData, err := common.ConvertToString(td.Results)
+	if err != nil {
+		klog.Errorf("Failed to convert %s %s value as string : %v", td.DeviceName, td.Name, err)
+		return nil, err
+	}
+	if len(sData) > 30 {
+		klog.V(4).Infof("Get %s : %s ,value is %s......", td.DeviceName, td.Name, sData[:30])
+	} else {
+		klog.V(4).Infof("Get %s : %s ,value is %s", td.DeviceName, td.Name, sData)
+	}
+	var payload []byte
+	if strings.Contains(td.Topic, "$hw") {
+		if payload, err = common.CreateMessageTwinUpdate(td.Name, td.Type, sData, td.ObservedDesired.Value); err != nil {
+			return nil, fmt.Errorf("create message twin update failed: %v", err)
+		}
+	} else {
+		if payload, err = common.CreateMessageData(td.Name, td.Type, sData); err != nil {
+			return nil, fmt.Errorf("create message data failed: %v", err)
+		}
+	}
+	return payload, nil
+}
+
+// PushToEdgeCore reads the property and reports it to EdgeCore via DMI gRPC.
+func (td *TwinData) PushToEdgeCore() {
+	payload, err := td.GetPayLoad()
+	if err != nil {
+		klog.Errorf("twindata %s unmarshal failed, err: %s", td.Name, err)
+		return
+	}
+
+	var msg common.DeviceTwinUpdate
+	if err = json.Unmarshal(payload, &msg); err != nil {
+		klog.Errorf("twindata %s unmarshal failed, err: %s", td.Name, err)
+		return
+	}
+
+	twins := parse.ConvMsgTwinToGrpc(msg.Twin)
+
+	rdsr := &dmiapi.ReportDeviceStatusRequest{
+		DeviceName:      td.DeviceName,
+		DeviceNamespace: td.DeviceNamespace,
+		ReportedDevice: &dmiapi.DeviceStatus{
+			Twins: twins,
+		},
+	}
+
+	if err := grpcclient.ReportDeviceStatus(rdsr); err != nil {
+		klog.Errorf("fail to report device status of %s with err: %+v", rdsr.DeviceName, err)
+	}
+}
+
+// Run starts the collect-and-report loop for this twin property.
+func (td *TwinData) Run(ctx context.Context) {
+	if !td.ReportToCloud {
+		return
+	}
+	if td.CollectCycle == 0 {
+		td.CollectCycle = common.DefaultCollectCycle
+	}
+	ticker := time.NewTicker(td.CollectCycle)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			td.PushToEdgeCore()
+		case <-ctx.Done():
+			return
+		}
+	}
+}

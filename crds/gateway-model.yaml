@@ -1,0 +1,34 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: DeviceModel
+metadata:
+  name: iot-gateway-model
+  namespace: default
+spec:
+  protocol: "mqttIot"
+  properties:
+    # ── 可写控制属性 ─────────────────────────────────────────
+    - name: taskControl
+      description: "控制任务开始或停止：1=任务运行中 / 0=采集任务已停止"
+      type: INT
+      accessMode: ReadWrite
+
+    - name: collectInterval
+      description: "业务数据采集间隔（秒），须≥1，mapper 通过 cmd 主题下发"
+      type: INT
+      accessMode: ReadWrite
+
+    # ── 只读状态属性 ─────────────────────────────────────────
+    - name: collectPointTotal
+      description: "网关配置的采集测点总数（只读，由设备上报）"
+      type: INT
+      accessMode: ReadOnly
+
+    - name: collectPointOnline
+      description: "当前正常采集的测点数量（只读，由设备上报）"
+      type: INT
+      accessMode: ReadOnly
+
+    - name: lastCollectTime
+      description: "最近一次业务数据采集时间（毫秒时间戳，只读）"
+      type: INT
+      accessMode: ReadOnly

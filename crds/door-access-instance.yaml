@@ -1,0 +1,82 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: Device
+metadata:
+  name: iot-door-access-001
+  namespace: default
+  annotations:
+    description: "门禁设备实例，对应 11-door-access-simulator 模拟器"
+spec:
+  deviceModelRef:
+    name: iot-door-access-model
+  nodeName: cloudedge-edge-02
+  protocol:
+    protocolName: mqttIot
+    configData:
+      mqttBroker: "tcp://192.168.122.212:1884"
+      deviceId: "door-access-001"
+      mqttUsername: ""
+      mqttPassword: ""
+      mqttClientId: "mapper-door-access-001"
+      dataForwardBroker: ""
+      dataForwardTopic: ""
+
+  properties:
+    - name: taskControl
+      visitors:
+        configData:
+          fieldName: taskControl
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+      desired:
+        value: "1"
+
+    - name: door1Control1
+      visitors:
+        configData:
+          fieldName: door1Control1
+      collectCycle: 5000
+      reportCycle: 5000
+      reportToCloud: true
+      desired:
+        value: "0"   # 默认关门
+
+    - name: door1Control2
+      visitors:
+        configData:
+          fieldName: door1Control2
+      collectCycle: 5000
+      reportCycle: 5000
+      reportToCloud: true
+      desired:
+        value: "0"
+
+    - name: door1OperateTime1
+      visitors:
+        configData:
+          fieldName: door1OperateTime1
+      collectCycle: 5000
+      reportCycle: 5000
+      reportToCloud: true
+
+    - name: door1OperateTime2
+      visitors:
+        configData:
+          fieldName: door1OperateTime2
+      collectCycle: 5000
+      reportCycle: 5000
+      reportToCloud: true
+
+  methods:
+    - name: SetTaskControl
+      description: "控制门禁任务启停"
+      propertyNames:
+        - taskControl
+    - name: OpenDoor1
+      description: "控制门禁1开关：1=开门 / 0=关门（设备收到后会在 AUTO_CLOSE_DELAY 秒后自动关门）"
+      propertyNames:
+        - door1Control1
+    - name: OpenDoor2
+      description: "控制门禁2开关"
+      propertyNames:
+        - door1Control2

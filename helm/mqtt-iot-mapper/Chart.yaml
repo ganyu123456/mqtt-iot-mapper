@@ -1,0 +1,13 @@
+apiVersion: v2
+name: mqtt-iot-mapper
+description: 通用 IoT MQTT Mapper，实现 KubeEdge Device Twin 与第三方设备 status/cmd/data 三主题协议的双向桥接
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - iot
+  - kubeedge
+  - mapper
+  - mqtt
+maintainers:
+  - name: ganyu

@@ -1,0 +1,84 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: Device
+metadata:
+  name: iot-camera-001
+  namespace: default
+  annotations:
+    description: "摄像头设备实例，对应 12-camera-simulator 模拟器"
+spec:
+  deviceModelRef:
+    name: iot-camera-model
+  nodeName: cloudedge-edge-02
+  protocol:
+    protocolName: mqttIot
+    configData:
+      mqttBroker: "tcp://192.168.122.212:1884"
+      deviceId: "camera-001"
+      mqttUsername: ""
+      mqttPassword: ""
+      mqttClientId: "mapper-camera-001"
+      dataForwardBroker: ""
+      dataForwardTopic: ""
+
+  properties:
+    - name: taskControl
+      visitors:
+        configData:
+          fieldName: taskControl
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+      desired:
+        value: "1"
+
+    - name: captureInterval
+      visitors:
+        configData:
+          fieldName: captureInterval
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+      desired:
+        value: "10"
+
+    - name: recordStatus
+      visitors:
+        configData:
+          fieldName: recordStatus
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+
+    - name: streamUrl
+      visitors:
+        configData:
+          fieldName: streamUrl
+      collectCycle: 60000
+      reportCycle: 60000
+      reportToCloud: true
+
+    - name: lastCaptureTime
+      visitors:
+        configData:
+          fieldName: lastCaptureTime
+      collectCycle: 10000
+      reportCycle: 10000
+      reportToCloud: true
+
+    - name: storageUsed
+      visitors:
+        configData:
+          fieldName: storageUsed
+      collectCycle: 30000
+      reportCycle: 30000
+      reportToCloud: true
+
+  methods:
+    - name: SetTaskControl
+      description: "控制录制任务：1=录制 / 0=停止"
+      propertyNames:
+        - taskControl
+    - name: SetCaptureInterval
+      description: "调整截图采集间隔（秒）"
+      propertyNames:
+        - captureInterval

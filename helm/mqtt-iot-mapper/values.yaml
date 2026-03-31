@@ -1,0 +1,46 @@
+# ============================================================
+# mqtt-iot-mapper Helm Chart 默认配置
+# ============================================================
+
+image:
+  repository: harbor.zkjgy.online/library/mqtt-iot-mapper
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: harbor-secret
+
+# ── KubeEdge 边缘节点调度 ──────────────────────────────────
+nodeName: cloudedge-edge-02
+tolerations:
+  - key: node-role.kubernetes.io/edge
+    operator: Exists
+    effect: NoSchedule
+
+# mapper 需要访问 edgecore dmi.sock，必须使用 hostNetwork
+hostNetwork: true
+dnsPolicy: ClusterFirstWithHostNet
+
+# ── 资源限制 ──────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+# 日志级别：4=Debug, 2=Info
+logLevel: "4"
+
+# ── mapper config.yaml 内容（挂载到 /tmp/config.yaml）─────
+mapperConfig:
+  grpc_server:
+    socket_path: /etc/kubeedge/mqtt-iot-mapper.sock
+  common:
+    name: mqtt-iot-mapper
+    version: v1.0.0
+    api_version: v1.0.0
+    protocol: mqttIot
+    address: 127.0.0.1
+    edgecore_sock: /etc/kubeedge/dmi.sock
