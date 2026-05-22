@@ -215,8 +215,7 @@ func (g *IoTGateway) handleStatus(_ mqtt.Client, msg mqtt.Message) {
 	}
 
 	for k, v := range sm.Status {
-		strVal := fmt.Sprintf("%v", v)
-		g.state.Set(k, strVal)
+		g.state.Set(k, fmt.Sprintf("%v", v))
 	}
 
 	klog.V(4).Infof("IoTGateway[%s]: status updated | %d fields | ts=%d",

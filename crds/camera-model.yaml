@@ -29,8 +29,8 @@ spec:
       accessMode: ReadOnly
 
     - name: lastCaptureTime
-      description: "最后截图时间（毫秒时间戳，只读）"
-      type: INT
+      description: "最后截图时间（毫秒时间戳字符串，只读）"
+      type: STRING
       accessMode: ReadOnly
 
     - name: storageUsed

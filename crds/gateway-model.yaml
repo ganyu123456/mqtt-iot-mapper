@@ -29,6 +29,6 @@ spec:
       accessMode: ReadOnly
 
     - name: lastCollectTime
-      description: "最近一次业务数据采集时间（毫秒时间戳，只读）"
-      type: INT
+      description: "最近一次业务数据采集时间（毫秒时间戳字符串，只读）"
+      type: STRING
       accessMode: ReadOnly

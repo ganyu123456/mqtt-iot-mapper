@@ -24,11 +24,11 @@ spec:
 
     # ── 只读状态属性 ─────────────────────────────────────────
     - name: door1OperateTime1
-      description: "门禁1最后一次操作时间（毫秒时间戳，只读）"
-      type: INT
+      description: "门禁1最后一次操作时间（毫秒时间戳字符串，只读）"
+      type: STRING
       accessMode: ReadOnly
 
     - name: door1OperateTime2
-      description: "门禁2最后一次操作时间（毫秒时间戳，只读）"
-      type: INT
+      description: "门禁2最后一次操作时间（毫秒时间戳字符串，只读）"
+      type: STRING
       accessMode: ReadOnly
