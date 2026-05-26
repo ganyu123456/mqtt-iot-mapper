@@ -34,6 +34,20 @@ jobs:
           push: true
           tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64
 
+      - name: Save amd64 image as tar.gz
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          docker pull harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64
+          docker save harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64 \
+            | gzip > mqtt-iot-mapper-amd64.tar.gz
+
+      - name: Upload amd64 artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqtt-iot-mapper-amd64
+          path: mqtt-iot-mapper-amd64.tar.gz
+
   build-arm64:
     name: Build and Push arm64
     runs-on: ubuntu-latest
@@ -63,6 +77,20 @@ jobs:
           push: true
           tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
 
+      - name: Save arm64 image as tar.gz
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          docker pull --platform linux/arm64 harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
+          docker save harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64 \
+            | gzip > mqtt-iot-mapper-arm64.tar.gz
+
+      - name: Upload arm64 artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqtt-iot-mapper-arm64
+          path: mqtt-iot-mapper-arm64.tar.gz
+
   manifest:
     name: Create and Push Manifest
     runs-on: ubuntu-latest
@@ -76,6 +104,9 @@ jobs:
           registry: harbor.zkjgy.online
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Create and Push Manifest
         run: |
@@ -108,3 +139,41 @@ jobs:
             --password $HARBOR_PASSWORD
           helm package helm/mqtt-iot-mapper --version 0.1.0
           helm push mqtt-iot-mapper-0.1.0.tgz oci://harbor.zkjgy.online/library
+
+      - name: Upload helm artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqtt-iot-mapper-helm
+          path: mqtt-iot-mapper-0.1.0.tgz
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - helm-package-push
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mqtt-iot-mapper-amd64
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mqtt-iot-mapper-arm64
+
+      - name: Download helm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mqtt-iot-mapper-helm
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            mqtt-iot-mapper-amd64.tar.gz
+            mqtt-iot-mapper-arm64.tar.gz
+            mqtt-iot-mapper-0.1.0.tgz
