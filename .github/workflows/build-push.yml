@@ -1,0 +1,110 @@
+name: Build and Push
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '**'
+
+jobs:
+  build-amd64:
+    name: Build and Push amd64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.zkjgy.online
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push amd64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64
+
+  build-arm64:
+    name: Build and Push arm64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.zkjgy.online
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
+
+  manifest:
+    name: Create and Push Manifest
+    runs-on: ubuntu-latest
+    needs:
+      - build-amd64
+      - build-arm64
+    steps:
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.zkjgy.online
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Create and Push Manifest
+        run: |
+          docker buildx imagetools create \
+            --tag harbor.zkjgy.online/library/mqtt-iot-mapper:latest \
+            harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64 \
+            harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
+
+  helm-package-push:
+    name: Helm Package and Push
+    runs-on: ubuntu-latest
+    needs:
+      - manifest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm Login and Push
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: |
+          helm registry login harbor.zkjgy.online \
+            --username $HARBOR_USERNAME \
+            --password $HARBOR_PASSWORD
+          helm package helm/mqtt-iot-mapper --version 0.1.0
+          helm push mqtt-iot-mapper-0.1.0.tgz oci://harbor.zkjgy.online/library
