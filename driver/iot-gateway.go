@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -209,13 +210,21 @@ func (g *IoTGateway) connectForwarder() error {
 // Parses status fields and updates IoTDeviceState so GetProperty can serve them.
 func (g *IoTGateway) handleStatus(_ mqtt.Client, msg mqtt.Message) {
 	var sm statusMessage
-	if err := json.Unmarshal(msg.Payload(), &sm); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(msg.Payload()))
+	dec.UseNumber()
+	if err := dec.Decode(&sm); err != nil {
 		klog.Errorf("IoTGateway[%s]: unmarshal status failed: %v", g.cfg.DeviceID, err)
 		return
 	}
 
 	for k, v := range sm.Status {
-		g.state.Set(k, fmt.Sprintf("%v", v))
+		var strVal string
+		if n, ok := v.(json.Number); ok {
+			strVal = n.String()
+		} else {
+			strVal = fmt.Sprintf("%v", v)
+		}
+		g.state.Set(k, strVal)
 	}
 
 	klog.V(4).Infof("IoTGateway[%s]: status updated | %d fields | ts=%d",
