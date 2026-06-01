@@ -17,8 +17,6 @@ spec:
       mqttUsername: ""
       mqttPassword: ""
       mqttClientId: "mapper-door-access-001"
-      dataForwardBroker: ""
-      dataForwardTopic: ""
 
   properties:
     - name: taskControl
@@ -26,7 +24,6 @@ spec:
         configData:
           fieldName: taskControl
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
       desired:
         value: "1"
@@ -36,7 +33,6 @@ spec:
         configData:
           fieldName: door1Control1
       collectCycle: 5000
-      reportCycle: 5000
       reportToCloud: true
       desired:
         value: "0"   # 默认关门
@@ -46,7 +42,6 @@ spec:
         configData:
           fieldName: door1Control2
       collectCycle: 5000
-      reportCycle: 5000
       reportToCloud: true
       desired:
         value: "0"
@@ -56,7 +51,6 @@ spec:
         configData:
           fieldName: door1OperateTime1
       collectCycle: 5000
-      reportCycle: 5000
       reportToCloud: true
 
     - name: door1OperateTime2
@@ -64,19 +58,4 @@ spec:
         configData:
           fieldName: door1OperateTime2
       collectCycle: 5000
-      reportCycle: 5000
       reportToCloud: true
-
-  methods:
-    - name: SetTaskControl
-      description: "控制门禁任务启停"
-      propertyNames:
-        - taskControl
-    - name: OpenDoor1
-      description: "控制门禁1开关：1=开门 / 0=关门（设备收到后会在 AUTO_CLOSE_DELAY 秒后自动关门）"
-      propertyNames:
-        - door1Control1
-    - name: OpenDoor2
-      description: "控制门禁2开关"
-      propertyNames:
-        - door1Control2

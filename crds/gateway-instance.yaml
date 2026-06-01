@@ -14,14 +14,11 @@ spec:
     configData:
       # 边缘节点 EMQX 地址
       mqttBroker: "tcp://192.168.122.212:1884"
-      # 设备唯一标识，决定 MQTT 主题：device/gateway-001/status|cmd|data
+      # 设备唯一标识，决定 MQTT 主题：device/gateway-001/status|cmd
       deviceId: "gateway-001"
       mqttUsername: ""
       mqttPassword: ""
       mqttClientId: "mapper-gateway-001"
-      # 可选：将 data 主题数据转发到平台数据面（留空则仅记录日志）
-      dataForwardBroker: ""
-      dataForwardTopic: ""
 
   properties:
     # ── 可写属性（mapper 在 desired 变更时向设备下发 cmd）──────
@@ -30,7 +27,6 @@ spec:
         configData:
           fieldName: taskControl
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
       desired:
         value: "1"   # 1=运行
@@ -40,7 +36,6 @@ spec:
         configData:
           fieldName: collectInterval
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
       desired:
         value: "5"   # 初始采集间隔 5s，mapper 启动时下发给设备
@@ -51,7 +46,6 @@ spec:
         configData:
           fieldName: collectPointTotal
       collectCycle: 30000
-      reportCycle: 30000
       reportToCloud: true
 
     - name: collectPointOnline
@@ -59,7 +53,6 @@ spec:
         configData:
           fieldName: collectPointOnline
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
 
     - name: lastCollectTime
@@ -67,15 +60,4 @@ spec:
         configData:
           fieldName: lastCollectTime
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
-
-  methods:
-    - name: SetTaskControl
-      description: "控制网关任务启停：1=运行 / 0=停止"
-      propertyNames:
-        - taskControl
-    - name: SetCollectInterval
-      description: "动态调整采集间隔（秒）"
-      propertyNames:
-        - collectInterval

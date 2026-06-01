@@ -82,26 +82,6 @@ func (c *CustomizedClient) SetDeviceData(data interface{}, visitor *VisitorConfi
 	return c.Gateway.SendCmd(fieldName, cast.ToString(data))
 }
 
-// DeviceDataWrite handles device method calls (triggered via HTTP API or cloud methods).
-func (c *CustomizedClient) DeviceDataWrite(visitor *VisitorConfig, deviceMethodName string, propertyName string, data interface{}) error {
-	c.deviceMutex.Lock()
-	defer c.deviceMutex.Unlock()
-
-	if c.Gateway == nil {
-		return fmt.Errorf("gateway not initialised")
-	}
-
-	fieldName := visitor.VisitorConfigData.FieldName
-	if fieldName == "" {
-		fieldName = propertyName
-	}
-
-	klog.Infof("DeviceDataWrite[%s]: method=%s field=%s value=%v",
-		c.ProtocolConfig.ConfigData.DeviceID, deviceMethodName, fieldName, data)
-
-	return c.Gateway.SendCmd(fieldName, cast.ToString(data))
-}
-
 // StopDevice cleanly disconnects the gateway.
 func (c *CustomizedClient) StopDevice() error {
 	c.deviceMutex.Lock()

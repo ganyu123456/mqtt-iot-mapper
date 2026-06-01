@@ -31,12 +31,13 @@ type cmdMessage struct {
 // Responsibilities:
 //   - Subscribe device/{deviceId}/status → parse fields → update IoTDeviceState
 //   - Publish  device/{deviceId}/cmd    → when SetProperty is called (desired value change)
-//   - Subscribe device/{deviceId}/data  → optional forward to DataForwardBroker
+//
+// The device/{deviceId}/data topic carries high-volume batch data and is handled
+// directly by the edge EMQX broker; this mapper does not subscribe to it.
 type IoTGateway struct {
 	cfg        ConfigData
 	state      *IoTDeviceState
 	mqttClient mqtt.Client
-	fwdClient  mqtt.Client // optional data-forwarding client
 	doneChan   chan struct{}
 }
 
@@ -49,7 +50,7 @@ func NewIoTGateway(cfg ConfigData, state *IoTDeviceState) *IoTGateway {
 	}
 }
 
-// Start connects to the MQTT broker, subscribes to status and data topics.
+// Start connects to the MQTT broker and subscribes to the status topic.
 func (g *IoTGateway) Start() error {
 	if err := g.connect(); err != nil {
 		return fmt.Errorf("connect to MQTT broker %s: %w", g.cfg.MQTTBroker, err)
@@ -57,17 +58,6 @@ func (g *IoTGateway) Start() error {
 
 	if err := g.subscribeStatus(); err != nil {
 		return fmt.Errorf("subscribe status topic: %w", err)
-	}
-
-	if err := g.subscribeData(); err != nil {
-		return fmt.Errorf("subscribe data topic: %w", err)
-	}
-
-	// Connect optional data-forwarding client.
-	if g.cfg.DataForwardBroker != "" {
-		if err := g.connectForwarder(); err != nil {
-			klog.Warningf("IoTGateway[%s]: data forward connect failed: %v (forwarding disabled)", g.cfg.DeviceID, err)
-		}
 	}
 
 	klog.Infof("IoTGateway[%s] started | broker=%s", g.cfg.DeviceID, g.cfg.MQTTBroker)
@@ -79,9 +69,6 @@ func (g *IoTGateway) Stop() {
 	close(g.doneChan)
 	if g.mqttClient != nil && g.mqttClient.IsConnected() {
 		g.mqttClient.Disconnect(500)
-	}
-	if g.fwdClient != nil && g.fwdClient.IsConnected() {
-		g.fwdClient.Disconnect(500)
 	}
 	klog.Infof("IoTGateway[%s] stopped", g.cfg.DeviceID)
 }
@@ -143,9 +130,7 @@ func (g *IoTGateway) connect() error {
 		SetAutoReconnect(true).
 		SetOnConnectHandler(func(c mqtt.Client) {
 			klog.Infof("IoTGateway[%s]: MQTT reconnected to %s", g.cfg.DeviceID, g.cfg.MQTTBroker)
-			// Re-subscribe after reconnect.
 			_ = g.subscribeStatus()
-			_ = g.subscribeData()
 		}).
 		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
 			klog.Warningf("IoTGateway[%s]: MQTT connection lost: %v", g.cfg.DeviceID, err)
@@ -163,6 +148,7 @@ func (g *IoTGateway) connect() error {
 	return token.Error()
 }
 
+
 func (g *IoTGateway) subscribeStatus() error {
 	topic := fmt.Sprintf("device/%s/status", g.cfg.DeviceID)
 	token := g.mqttClient.Subscribe(topic, 1, g.handleStatus)
@@ -173,36 +159,6 @@ func (g *IoTGateway) subscribeStatus() error {
 		return token.Error()
 	}
 	klog.Infof("IoTGateway[%s]: subscribed status → %s", g.cfg.DeviceID, topic)
-	return nil
-}
-
-func (g *IoTGateway) subscribeData() error {
-	topic := fmt.Sprintf("device/%s/data", g.cfg.DeviceID)
-	token := g.mqttClient.Subscribe(topic, 1, g.handleData)
-	if !token.WaitTimeout(5 * time.Second) {
-		return fmt.Errorf("subscribe timeout: %s", topic)
-	}
-	if token.Error() != nil {
-		return token.Error()
-	}
-	klog.Infof("IoTGateway[%s]: subscribed data → %s", g.cfg.DeviceID, topic)
-	return nil
-}
-
-func (g *IoTGateway) connectForwarder() error {
-	opts := mqtt.NewClientOptions().
-		AddBroker(g.cfg.DataForwardBroker).
-		SetClientID(g.clientID() + "-fwd").
-		SetAutoReconnect(true)
-	g.fwdClient = mqtt.NewClient(opts)
-	token := g.fwdClient.Connect()
-	if !token.WaitTimeout(10 * time.Second) {
-		return fmt.Errorf("forward connect timeout")
-	}
-	if err := token.Error(); err != nil {
-		return err
-	}
-	klog.Infof("IoTGateway[%s]: data forwarder connected → %s", g.cfg.DeviceID, g.cfg.DataForwardBroker)
 	return nil
 }
 
@@ -231,17 +187,3 @@ func (g *IoTGateway) handleStatus(_ mqtt.Client, msg mqtt.Message) {
 		g.cfg.DeviceID, len(sm.Status), sm.Timestamp)
 }
 
-// handleData is called on every device/{deviceId}/data message.
-// Forwards to DataForwardBroker if configured; otherwise just logs.
-func (g *IoTGateway) handleData(_ mqtt.Client, msg mqtt.Message) {
-	klog.V(4).Infof("IoTGateway[%s]: data received | %d bytes", g.cfg.DeviceID, len(msg.Payload()))
-
-	if g.fwdClient != nil && g.fwdClient.IsConnected() && g.cfg.DataForwardTopic != "" {
-		token := g.fwdClient.Publish(g.cfg.DataForwardTopic, 1, false, msg.Payload())
-		if !token.WaitTimeout(3 * time.Second) {
-			klog.Warningf("IoTGateway[%s]: data forward publish timeout", g.cfg.DeviceID)
-		} else {
-			klog.V(4).Infof("IoTGateway[%s]: data forwarded → %s", g.cfg.DeviceID, g.cfg.DataForwardTopic)
-		}
-	}
-}

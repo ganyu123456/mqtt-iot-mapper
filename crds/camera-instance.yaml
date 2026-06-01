@@ -17,8 +17,6 @@ spec:
       mqttUsername: ""
       mqttPassword: ""
       mqttClientId: "mapper-camera-001"
-      dataForwardBroker: ""
-      dataForwardTopic: ""
 
   properties:
     - name: taskControl
@@ -26,7 +24,6 @@ spec:
         configData:
           fieldName: taskControl
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
       desired:
         value: "1"
@@ -36,7 +33,6 @@ spec:
         configData:
           fieldName: captureInterval
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
       desired:
         value: "10"
@@ -46,7 +42,6 @@ spec:
         configData:
           fieldName: recordStatus
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
 
     - name: streamUrl
@@ -54,7 +49,6 @@ spec:
         configData:
           fieldName: streamUrl
       collectCycle: 60000
-      reportCycle: 60000
       reportToCloud: true
 
     - name: lastCaptureTime
@@ -62,7 +56,6 @@ spec:
         configData:
           fieldName: lastCaptureTime
       collectCycle: 10000
-      reportCycle: 10000
       reportToCloud: true
 
     - name: storageUsed
@@ -70,15 +63,4 @@ spec:
         configData:
           fieldName: storageUsed
       collectCycle: 30000
-      reportCycle: 30000
       reportToCloud: true
-
-  methods:
-    - name: SetTaskControl
-      description: "控制录制任务：1=录制 / 0=停止"
-      propertyNames:
-        - taskControl
-    - name: SetCaptureInterval
-      description: "调整截图采集间隔（秒）"
-      propertyNames:
-        - captureInterval

@@ -37,12 +37,7 @@ type ConfigData struct {
 	// DeviceID is the unique device identifier; determines MQTT topic paths:
 	//   Subscribe: device/{deviceId}/status
 	//   Publish:   device/{deviceId}/cmd
-	//   Subscribe: device/{deviceId}/data
 	DeviceID string `json:"deviceId"`
-	// DataForwardBroker (optional): if set, data topic messages are forwarded here.
-	DataForwardBroker string `json:"dataForwardBroker,omitempty"`
-	// DataForwardTopic (optional): target topic for data forwarding.
-	DataForwardTopic string `json:"dataForwardTopic,omitempty"`
 }
 
 // VisitorConfig is deserialized from Device CRD spec.properties[n].visitors.

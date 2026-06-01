@@ -327,9 +327,6 @@ func getTwinData(deviceID string, twin common.Twin, dev *driver.CustomizedDev) (
 	if err := json.Unmarshal(twin.Property.Visitors, &visitorConfig); err != nil {
 		return nil, err
 	}
-	if err := setVisitor(&visitorConfig, &twin, dev); err != nil {
-		return nil, err
-	}
 	twinData := &TwinData{
 		DeviceName:    deviceID,
 		Client:        dev.CustomizedClient,
@@ -368,62 +365,11 @@ func (d *DevPanel) RemoveDevice(deviceID string) error {
 	return d.stopDev(dev, deviceID)
 }
 
-// WriteDevice invokes a device method via the HTTP API.
+// WriteDevice is required by the mapper-framework DevPanel interface.
+// Device control is handled exclusively via Device Twin desired state updates;
+// the methods-based HTTP write path is not supported by this mapper.
 func (d *DevPanel) WriteDevice(deviceMethodName, deviceID, propertyName, data string) error {
-	d.serviceMutex.Lock()
-	defer d.serviceMutex.Unlock()
-	dev, ok := d.devices[deviceID]
-	if !ok {
-		return fmt.Errorf("not found device %s", deviceID)
-	}
-
-	deviceMethodMap := make(map[string][]string)
-	for _, method := range dev.Instance.Methods {
-		deviceMethodMap[method.Name] = append(deviceMethodMap[method.Name], method.PropertyNames...)
-	}
-
-	propertyNames, ok := deviceMethodMap[deviceMethodName]
-	if !ok {
-		return fmt.Errorf("deviceMethod name %s does not exist in device instance", deviceMethodName)
-	}
-
-	flag := false
-	for _, name := range propertyNames {
-		if name == propertyName {
-			flag = true
-			break
-		}
-	}
-	if !flag {
-		return fmt.Errorf("deviceProperty %s to be written is not in the list defined by devicemethod", propertyName)
-	}
-
-	var dataType string
-	var deviceproperty common.DeviceProperty
-	flag = false
-	for _, property := range dev.Instance.Properties {
-		if property.PropertyName != propertyName {
-			continue
-		}
-		dataType = property.PProperty.DataType
-		deviceproperty = property
-		flag = true
-		break
-	}
-	if !flag {
-		return fmt.Errorf("can't find device propertyName %s in device instance", propertyName)
-	}
-
-	writeData, err := common.Convert(strings.ToLower(dataType), data)
-	if err != nil {
-		return fmt.Errorf("conversion data format failed: datatype=%s data=%s", strings.ToLower(dataType), data)
-	}
-
-	var visitorConfig driver.VisitorConfig
-	if err = json.Unmarshal(deviceproperty.Visitors, &visitorConfig); err != nil {
-		return err
-	}
-	return dev.CustomizedClient.DeviceDataWrite(&visitorConfig, deviceMethodName, propertyName, writeData)
+	return fmt.Errorf("WriteDevice is not supported: use Device Twin desired state to control devices")
 }
 
 func (d *DevPanel) stopDev(dev *driver.CustomizedDev, id string) error {
@@ -480,9 +426,6 @@ func (d *DevPanel) GetTwinResult(deviceID string, twinName string) (string, stri
 		if err := json.Unmarshal(twin.Property.Visitors, &visitorConfig); err != nil {
 			return "", "", err
 		}
-		if err := setVisitor(&visitorConfig, &twin, dev); err != nil {
-			return "", "", err
-		}
 		data, err := dev.CustomizedClient.GetDeviceData(&visitorConfig)
 		if err != nil {
 			return "", "", fmt.Errorf("get device data failed: %v", err)
@@ -496,23 +439,8 @@ func (d *DevPanel) GetTwinResult(deviceID string, twinName string) (string, stri
 	return res, dataType, nil
 }
 
-// GetDeviceMethod returns a map of method names to property names, and property data types.
+// GetDeviceMethod is required by the mapper-framework DevPanel interface.
+// This mapper does not expose device methods; all control is via Device Twin desired state.
 func (d *DevPanel) GetDeviceMethod(deviceID string) (map[string][]string, map[string]string, error) {
-	d.serviceMutex.Lock()
-	defer d.serviceMutex.Unlock()
-	found, ok := d.devices[deviceID]
-	if !ok || found == nil {
-		return nil, nil, fmt.Errorf("device %s not found", deviceID)
-	}
-
-	deviceMethodMap := make(map[string][]string)
-	propertyTypeMap := make(map[string]string)
-
-	for _, method := range found.Instance.Methods {
-		deviceMethodMap[method.Name] = append(deviceMethodMap[method.Name], method.PropertyNames...)
-	}
-	for _, property := range found.Instance.Properties {
-		propertyTypeMap[property.Name] = strings.ToLower(property.PProperty.DataType)
-	}
-	return deviceMethodMap, propertyTypeMap, nil
+	return nil, nil, fmt.Errorf("GetDeviceMethod is not supported: use Device Twin desired state to control devices")
 }
