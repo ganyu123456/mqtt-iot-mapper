@@ -4,7 +4,7 @@ metadata:
   name: iot-camera-model
   namespace: default
 spec:
-  protocol: "mqttIot"
+  protocol: "mqtt-iot-mapper"
   properties:
     # ── 可写控制属性 ─────────────────────────────────────────
     - name: taskControl

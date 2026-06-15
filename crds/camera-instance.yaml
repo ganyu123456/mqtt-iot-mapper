@@ -10,7 +10,7 @@ spec:
     name: iot-camera-model
   nodeName: cloudedge-edge-02
   protocol:
-    protocolName: mqttIot
+    protocolName: mqtt-iot-mapper
     configData:
       mqttBroker: "tcp://192.168.122.212:1884"
       deviceId: "camera-001"

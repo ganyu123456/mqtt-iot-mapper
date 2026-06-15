@@ -11,6 +11,6 @@ data:
       name: mqtt-iot-mapper
       version: v1.0.0
       api_version: v1.0.0
-      protocol: mqttIot
+      protocol: mqtt-iot-mapper
       address: 127.0.0.1
       edgecore_sock: /etc/kubeedge/dmi.sock
