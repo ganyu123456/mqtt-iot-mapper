@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spf13/cast"
 	"k8s.io/klog/v2"
 
 	"github.com/kubeedge/mapper-framework/pkg/common"
@@ -79,7 +78,7 @@ func (c *CustomizedClient) SetDeviceData(data interface{}, visitor *VisitorConfi
 	klog.Infof("SetDeviceData[%s]: field=%s value=%v",
 		c.ProtocolConfig.ConfigData.DeviceID, fieldName, data)
 
-	return c.Gateway.SendCmd(fieldName, cast.ToString(data))
+	return c.Gateway.SendCmd(fieldName, data)
 }
 
 // StopDevice cleanly disconnects the gateway.

@@ -113,6 +113,10 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 	go getStates.Run(ctx)
 
 	for _, twin := range dev.Instance.Twins {
+		if twin.Property.PProperty == nil {
+			klog.Warningf("%s twin property %q has no model definition, skipping", dev.Instance.Name, twin.PropertyName)
+			continue
+		}
 		twin.Property.PProperty.DataType = strings.ToLower(twin.Property.PProperty.DataType)
 		var visitorConfig driver.VisitorConfig
 
