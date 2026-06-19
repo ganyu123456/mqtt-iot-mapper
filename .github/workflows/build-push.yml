@@ -226,10 +226,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download amd64 image
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: image-amd64
+          path: artifacts/image-amd64
+
+      - name: Download arm64 image
+        uses: actions/download-artifact@v4
+        with:
+          name: image-arm64
+          path: artifacts/image-arm64
+
+      - name: Download helm chart
+        uses: actions/download-artifact@v4
+        with:
+          name: helm-chart
+          path: artifacts/helm-chart
 
       - name: Generate upload.sh
         run: |
