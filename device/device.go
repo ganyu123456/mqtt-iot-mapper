@@ -213,7 +213,8 @@ func setVisitor(visitorConfig *driver.VisitorConfig, twin *common.Twin, dev *dri
 		klog.V(3).Infof("%s twin readonly property: %s", dev.Instance.Name, twin.PropertyName)
 		return nil
 	}
-	klog.V(2).Infof("Convert type: %s, value: %s", twin.Property.PProperty.DataType, twin.ObservedDesired.Value)
+	klog.Infof("[CMD-DEBUG] field=%s dataType=%q rawValue=%q",
+		twin.PropertyName, twin.Property.PProperty.DataType, twin.ObservedDesired.Value)
 	var value interface{}
 	if twin.ObservedDesired.Value != "" {
 		convertedValue, err := common.Convert(twin.Property.PProperty.DataType, twin.ObservedDesired.Value)
@@ -222,6 +223,8 @@ func setVisitor(visitorConfig *driver.VisitorConfig, twin *common.Twin, dev *dri
 			return err
 		}
 		value = convertedValue
+		klog.Infof("[CMD-DEBUG] field=%s convertedType=%T convertedValue=%v",
+			twin.PropertyName, value, value)
 	} else {
 		value = twin.ObservedDesired.Value
 	}

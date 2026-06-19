@@ -5,7 +5,7 @@
 image:
   repository: harbor.zkjgy.online/library/mqtt-iot-mapper
   tag: latest
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 imagePullSecrets:
   - name: harbor-secret

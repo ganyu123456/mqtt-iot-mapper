@@ -5,177 +5,391 @@ on:
     branches:
       - main
     tags:
-      - '**'
+      - 'v*'
+
+env:
+  REGISTRY: harbor.zkjgy.online
+  PROJECT: library
+  IMAGE_NAME: mqtt-iot-mapper
 
 jobs:
+  # ── 提取版本号 ─────────────────────────────────────────────
+  version:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      is_tag:  ${{ steps.meta.outputs.is_tag }}
+    steps:
+      - id: meta
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF#refs/tags/v}"
+            echo "version=$V" >> $GITHUB_OUTPUT
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+          echo "Resolved version: $(cat $GITHUB_OUTPUT)"
+
+  # ── amd64 镜像 ─────────────────────────────────────────────
   build-amd64:
-    name: Build and Push amd64
+    name: Build amd64
+    needs: version
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: harbor.zkjgy.online
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push amd64
+      - name: Build and push amd64
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64
           push: true
-          tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64
 
-      - name: Save amd64 image as tar.gz
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Save image for offline release
+        if: needs.version.outputs.is_tag == 'true'
         run: |
-          docker pull harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64
-          docker save harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64 \
-            | gzip > mqtt-iot-mapper-amd64.tar.gz
+          docker pull --platform linux/amd64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64
+          docker save \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64 \
+            | gzip > ${{ env.IMAGE_NAME }}-amd64.tar.gz
 
       - name: Upload amd64 artifact
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.version.outputs.is_tag == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mqtt-iot-mapper-amd64
-          path: mqtt-iot-mapper-amd64.tar.gz
+          name: image-amd64
+          path: ${{ env.IMAGE_NAME }}-amd64.tar.gz
+          retention-days: 1
 
+  # ── arm64 镜像 ─────────────────────────────────────────────
   build-arm64:
-    name: Build and Push arm64
+    name: Build arm64
+    needs: version
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: harbor.zkjgy.online
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and Push arm64
+      - name: Build and push arm64
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/arm64
           push: true
-          tags: harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64
 
-      - name: Save arm64 image as tar.gz
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Save image for offline release
+        if: needs.version.outputs.is_tag == 'true'
         run: |
-          docker pull --platform linux/arm64 harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
-          docker save harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64 \
-            | gzip > mqtt-iot-mapper-arm64.tar.gz
+          docker pull --platform linux/arm64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64
+          docker save \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64 \
+            | gzip > ${{ env.IMAGE_NAME }}-arm64.tar.gz
 
       - name: Upload arm64 artifact
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.version.outputs.is_tag == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mqtt-iot-mapper-arm64
-          path: mqtt-iot-mapper-arm64.tar.gz
+          name: image-arm64
+          path: ${{ env.IMAGE_NAME }}-arm64.tar.gz
+          retention-days: 1
 
+  # ── 多架构 manifest ────────────────────────────────────────
   manifest:
-    name: Create and Push Manifest
+    name: Create manifest
     runs-on: ubuntu-latest
     needs:
+      - version
       - build-amd64
       - build-arm64
     steps:
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: harbor.zkjgy.online
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Create and Push Manifest
+      - name: Create and push manifests
         run: |
-          docker buildx imagetools create \
-            --tag harbor.zkjgy.online/library/mqtt-iot-mapper:latest \
-            harbor.zkjgy.online/library/mqtt-iot-mapper:linux-amd64 \
-            harbor.zkjgy.online/library/mqtt-iot-mapper:linux-arm64
+          V="${{ needs.version.outputs.version }}"
+          BASE="${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}"
 
-  helm-package-push:
-    name: Helm Package and Push
+          # 版本 manifest
+          docker buildx imagetools create \
+            --tag "${BASE}:${V}" \
+            "${BASE}:${V}-amd64" \
+            "${BASE}:${V}-arm64"
+
+          # 更新 latest manifest
+          docker buildx imagetools create \
+            --tag "${BASE}:latest" \
+            "${BASE}:${V}-amd64" \
+            "${BASE}:${V}-arm64"
+
+          echo "Manifest ${BASE}:${V} and ${BASE}:latest created"
+
+  # ── Helm 打包 & 推送 ───────────────────────────────────────
+  helm-package:
+    name: Helm package
     runs-on: ubuntu-latest
     needs:
+      - version
       - manifest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.14.0
 
-      - name: Helm Login and Push
+      - name: Update chart version and image tag
+        if: needs.version.outputs.is_tag == 'true'
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          CHART="helm/${IMAGE_NAME}/Chart.yaml"
+          VALUES="helm/${IMAGE_NAME}/values.yaml"
+
+          sed -i "s/^version:.*/version: $V/" "$CHART"
+          sed -i "s/^appVersion:.*/appVersion: \"$V\"/" "$CHART"
+          sed -i "s/^  tag:.*/  tag: \"$V\"/" "$VALUES"
+
+          echo "Updated Chart.yaml:"
+          cat "$CHART"
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+
+      - name: Package Helm chart
+        run: |
+          helm package helm/${{ env.IMAGE_NAME }}
+
+      - name: Push to Harbor (OCI)
+        if: needs.version.outputs.is_tag == 'true'
         env:
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
         run: |
-          helm registry login harbor.zkjgy.online \
-            --username $HARBOR_USERNAME \
-            --password $HARBOR_PASSWORD
-          helm package helm/mqtt-iot-mapper --version 0.1.0
-          helm push mqtt-iot-mapper-0.1.0.tgz oci://harbor.zkjgy.online/library
+          V="${{ needs.version.outputs.version }}"
+          helm registry login ${{ env.REGISTRY }} \
+            --username "$HARBOR_USERNAME" \
+            --password "$HARBOR_PASSWORD"
+          helm push ${{ env.IMAGE_NAME }}-${V}.tgz oci://${{ env.REGISTRY }}/${{ env.PROJECT }}
 
       - name: Upload helm artifact
-        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: mqtt-iot-mapper-helm
-          path: mqtt-iot-mapper-0.1.0.tgz
+          name: helm-chart
+          path: ${{ env.IMAGE_NAME }}-${{ needs.version.outputs.version }}.tgz
+          retention-days: 1
 
+  # ── 离线发布包 (仅 tag) ────────────────────────────────────
   release:
-    name: Create GitHub Release
+    name: GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - helm-package-push
-    if: startsWith(github.ref, 'refs/tags/')
+      - version
+      - build-amd64
+      - build-arm64
+      - helm-package
+    if: needs.version.outputs.is_tag == 'true'
     permissions:
       contents: write
     steps:
-      - name: Download amd64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mqtt-iot-mapper-amd64
+      - uses: actions/checkout@v4
 
-      - name: Download arm64 artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: mqtt-iot-mapper-arm64
+          path: artifacts
 
-      - name: Download helm artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mqtt-iot-mapper-helm
+      - name: Generate upload.sh
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          BASE="${{ env.REGISTRY }}/${{ env.PROJECT }}"
+          IMG="${{ env.IMAGE_NAME }}"
+
+          cat > upload.sh << 'SCRIPT'
+          #!/usr/bin/env bash
+          # ============================================================
+          # MQTT IoT Mapper – 离线上传脚本
+          # 用法: bash upload.sh <VERSION> [HARBOR_URL] [USERNAME] [PASSWORD]
+          # ============================================================
+          set -euo pipefail
+
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          NC='\033[0m'
+
+          VERSION="${1:-}"
+          if [[ -z "$VERSION" ]]; then
+            echo -e "${RED}Usage: bash upload.sh <VERSION> [HARBOR_URL] [USERNAME] [PASSWORD]${NC}"
+            echo "Example: bash upload.sh 1.0.0 harbor.example.com admin Harbor12345"
+            exit 1
+          fi
+
+          HARBOR_URL="${2:-harbor.zkjgy.online}"
+          USERNAME="${3:-admin}"
+          PASSWORD="${4:-Harbor12345}"
+          PROJECT="library"
+          IMAGE="mqtt-iot-mapper"
+
+          echo -e "${GREEN}============================================${NC}"
+          echo -e "${GREEN}  MQTT IoT Mapper v${VERSION} 离线上传${NC}"
+          echo -e "${GREEN}  Harbor: ${HARBOR_URL}/${PROJECT}${NC}"
+          echo -e "${GREEN}============================================${NC}"
+
+          # ── 1. 加载镜像 ──────────────────────────────────
+          echo ""
+          echo "[1/4] Loading Docker images..."
+
+          for arch in amd64 arm64; do
+            TGZ="${IMAGE}-${arch}.tar.gz"
+            if [[ ! -f "$TGZ" ]]; then
+              echo -e "${RED}Error: $TGZ not found${NC}"
+              exit 1
+            fi
+            echo "  Loading $TGZ ..."
+            docker load < "$TGZ"
+          done
+
+          # ── 2. 登录 Harbor ───────────────────────────────
+          echo ""
+          echo "[2/4] Logging in to ${HARBOR_URL}..."
+          echo "$PASSWORD" | docker login "$HARBOR_URL" -u "$USERNAME" --password-stdin
+
+          # ── 3. 推送镜像 ──────────────────────────────────
+          echo ""
+          echo "[3/4] Pushing images..."
+
+          DST_BASE="${HARBOR_URL}/${PROJECT}/${IMAGE}"
+
+          for arch in amd64 arm64; do
+            SRC_TAG="${BASE}/${IMAGE}:${VERSION}-${arch}"
+            DST_TAG="${DST_BASE}:${VERSION}-${arch}"
+            echo "  Pushing ${DST_TAG} ..."
+            docker tag "$SRC_TAG" "$DST_TAG"
+            docker push "$DST_TAG"
+          done
+
+          # ── 4. 创建 manifest ─────────────────────────────
+          echo ""
+          echo "[4/4] Creating multi-arch manifest..."
+          docker manifest create "${DST_BASE}:${VERSION}" \
+            "${DST_BASE}:${VERSION}-amd64" \
+            "${DST_BASE}:${VERSION}-arm64"
+          docker manifest push "${DST_BASE}:${VERSION}"
+
+          docker manifest create "${DST_BASE}:latest" \
+            "${DST_BASE}:${VERSION}-amd64" \
+            "${DST_BASE}:${VERSION}-arm64"
+          docker manifest push "${DST_BASE}:latest"
+
+          # ── Helm ─────────────────────────────────────────
+          echo ""
+          echo "--- Helm Chart ---"
+          CHART_FILE="${IMAGE}-${VERSION}.tgz"
+          if [[ -f "$CHART_FILE" ]]; then
+            echo "  Found $CHART_FILE"
+            echo "  To install:"
+            echo "    helm install ${IMAGE} ./${CHART_FILE}"
+            echo ""
+            echo "  To push to OCI registry:"
+            echo "    helm registry login ${HARBOR_URL} --username ${USERNAME} --password <password>"
+            echo "    helm push ${CHART_FILE} oci://${HARBOR_URL}/${PROJECT}"
+          else
+            echo -e "${RED}  Warning: $CHART_FILE not found${NC}"
+          fi
+
+          echo ""
+          echo -e "${GREEN}============================================${NC}"
+          echo -e "${GREEN}  Upload complete!${NC}"
+          echo -e "${GREEN}  Image: ${DST_BASE}:${VERSION} (multi-arch)${NC}"
+          echo -e "${GREEN}============================================${NC}"
+          SCRIPT
+          chmod +x upload.sh
+
+          # 替换 upload.sh 中的 BASE 占位符
+          sed -i "s|\${BASE}|${BASE}|g" upload.sh
+        env:
+          BASE: ${{ env.REGISTRY }}/${{ env.PROJECT }}
+
+      - name: Build offline package
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          NAME="${{ env.IMAGE_NAME }}"
+          PKG_DIR="${NAME}-${V}-offline"
+          mkdir -p "$PKG_DIR"
+
+          # 镜像
+          cp artifacts/image-amd64/${NAME}-amd64.tar.gz "$PKG_DIR/"
+          cp artifacts/image-arm64/${NAME}-arm64.tar.gz "$PKG_DIR/"
+
+          # Helm
+          cp artifacts/helm-chart/${NAME}-${V}.tgz "$PKG_DIR/"
+
+          # upload.sh
+          cp upload.sh "$PKG_DIR/"
+
+          # README
+          cat > "$PKG_DIR/README.txt" << EOF
+          MQTT IoT Mapper — 离线部署包 v${V}
+          =================================
+
+          包含文件:
+            mqtt-iot-mapper-amd64.tar.gz   – linux/amd64 镜像
+            mqtt-iot-mapper-arm64.tar.gz   – linux/arm64 镜像
+            mqtt-iot-mapper-${V}.tgz       – Helm Chart
+            upload.sh                      – 自动上传脚本
+
+          离线部署步骤:
+            1. scp mqtt-iot-mapper-${V}-offline.tar.gz user@target:/opt/
+            2. tar xzf mqtt-iot-mapper-${V}-offline.tar.gz
+            3. cd mqtt-iot-mapper-${V}-offline
+            4. bash upload.sh ${V} <your-harbor-url> <username> <password>
+            5. helm install mqtt-iot-mapper ./mqtt-iot-mapper-${V}.tgz
+
+          离线 Helm 安装 (已上传镜像后):
+            helm install mqtt-iot-mapper ./mqtt-iot-mapper-${V}.tgz
+          EOF
+
+          tar czf "${NAME}-${V}-offline.tar.gz" "$PKG_DIR"
+          echo "Created ${NAME}-${V}-offline.tar.gz"
+          ls -lh "${NAME}-${V}-offline.tar.gz"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: v${{ needs.version.outputs.version }}
           generate_release_notes: true
           files: |
-            mqtt-iot-mapper-amd64.tar.gz
-            mqtt-iot-mapper-arm64.tar.gz
-            mqtt-iot-mapper-0.1.0.tgz
+            ${{ env.IMAGE_NAME }}-${{ needs.version.outputs.version }}-offline.tar.gz
+            artifacts/helm-chart/${{ env.IMAGE_NAME }}-${{ needs.version.outputs.version }}.tgz
