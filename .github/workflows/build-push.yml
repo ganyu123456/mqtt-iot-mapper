@@ -202,7 +202,7 @@ jobs:
           helm registry login ${{ env.REGISTRY }} \
             --username "$HARBOR_USERNAME" \
             --password "$HARBOR_PASSWORD"
-          helm push ${{ env.IMAGE_NAME }}-${V}.tgz oci://${{ env.REGISTRY }}/${{ env.PROJECT }}
+          helm push ${{ env.IMAGE_NAME }}-${V}.tgz oci://${{ env.REGISTRY }}/charts
 
       - name: Upload helm artifact
         uses: actions/upload-artifact@v4
@@ -337,7 +337,7 @@ jobs:
             echo ""
             echo "  To push to OCI registry:"
             echo "    helm registry login ${HARBOR_URL} --username ${USERNAME} --password <password>"
-            echo "    helm push ${CHART_FILE} oci://${HARBOR_URL}/${PROJECT}"
+            echo "    helm push ${CHART_FILE} oci://${HARBOR_URL}/charts"
           else
             echo -e "${RED}  Warning: $CHART_FILE not found${NC}"
           fi
@@ -405,4 +405,6 @@ jobs:
           generate_release_notes: true
           files: |
             ${{ env.IMAGE_NAME }}-${{ needs.version.outputs.version }}-offline.tar.gz
+            artifacts/image-amd64/${{ env.IMAGE_NAME }}-amd64.tar.gz
+            artifacts/image-arm64/${{ env.IMAGE_NAME }}-arm64.tar.gz
             artifacts/helm-chart/${{ env.IMAGE_NAME }}-${{ needs.version.outputs.version }}.tgz
