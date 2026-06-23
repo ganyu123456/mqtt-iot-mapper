@@ -135,7 +135,7 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			DeviceNamespace: dev.Instance.Namespace,
 			Client:          dev.CustomizedClient,
 			Name:            twin.PropertyName,
-			Type:            twin.ObservedDesired.Metadata.Type,
+			Type:            twin.Property.PProperty.DataType,
 			ObservedDesired: twin.ObservedDesired,
 			VisitorConfig:   &visitorConfig,
 			Topic:           fmt.Sprintf(common.TopicTwinUpdate, dev.Instance.ID),
@@ -148,7 +148,7 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			dev.Instance.Name,
 			twin.Property.PropertyName,
 			dev.Instance.Namespace,
-			common.WithType(twin.ObservedDesired.Metadata.Type),
+			common.WithType(twin.Property.PProperty.DataType),
 		)
 		if twin.Property.PushMethod.MethodConfig != nil && twin.Property.PushMethod.MethodName != "" {
 			pushHandler(ctx, &twin, dev.CustomizedClient, &visitorConfig, dataModel)
@@ -338,7 +338,7 @@ func getTwinData(deviceID string, twin common.Twin, dev *driver.CustomizedDev) (
 		DeviceName:    deviceID,
 		Client:        dev.CustomizedClient,
 		Name:          twin.PropertyName,
-		Type:          twin.ObservedDesired.Metadata.Type,
+		Type:          twin.Property.PProperty.DataType,
 		VisitorConfig: &visitorConfig,
 		Topic:         fmt.Sprintf(common.TopicTwinUpdate, deviceID),
 	}
