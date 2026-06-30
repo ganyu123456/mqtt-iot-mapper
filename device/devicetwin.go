@@ -91,6 +91,8 @@ func (td *TwinData) PushToEdgeCore() {
 }
 
 // Run starts the collect-and-report loop for this twin property.
+// Deprecated: use DeviceReporter.Run instead, which batches all twin updates
+// for a device into a single ReportDeviceStatus gRPC call.
 func (td *TwinData) Run(ctx context.Context) {
 	if !td.ReportToCloud {
 		return
@@ -107,5 +109,101 @@ func (td *TwinData) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// TwinReporter is the per-twin metadata needed by DeviceReporter.
+type TwinReporter struct {
+	Name            string
+	Type            string
+	ObservedDesired common.TwinProperty
+	VisitorConfig   *driver.VisitorConfig
+	Topic           string
+}
+
+// DeviceReporter batches all twin status reports for a single device into one
+// ReportDeviceStatus gRPC call, avoiding "too many request" rate limiting from EdgeCore.
+type DeviceReporter struct {
+	DeviceName      string
+	DeviceNamespace string
+	Client          *driver.CustomizedClient
+	Twins           []TwinReporter
+	CollectCycle    time.Duration
+}
+
+// NewDeviceReporter creates a DeviceReporter. If all twins share the same CollectCycle
+// the first non-zero cycle is used; otherwise DefaultCollectCycle is used.
+func NewDeviceReporter(dev *driver.CustomizedDev, twins []TwinReporter, collectCycle time.Duration) *DeviceReporter {
+	return &DeviceReporter{
+		DeviceName:      dev.Instance.Name,
+		DeviceNamespace: dev.Instance.Namespace,
+		Client:          dev.CustomizedClient,
+		Twins:           twins,
+		CollectCycle:    collectCycle,
+	}
+}
+
+// Run starts the batched collect-and-report loop.
+func (dr *DeviceReporter) Run(ctx context.Context) {
+	if len(dr.Twins) == 0 {
+		return
+	}
+	if dr.CollectCycle == 0 {
+		dr.CollectCycle = common.DefaultCollectCycle
+	}
+	ticker := time.NewTicker(dr.CollectCycle)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			dr.reportAll()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// reportAll reads every twin from the device driver and sends them in a single
+// ReportDeviceStatus gRPC call.
+func (dr *DeviceReporter) reportAll() {
+	allTwins := make([]*dmiapi.Twin, 0, len(dr.Twins))
+
+	for _, tr := range dr.Twins {
+		td := &TwinData{
+			DeviceName:      dr.DeviceName,
+			Client:          dr.Client,
+			Name:            tr.Name,
+			Type:            tr.Type,
+			VisitorConfig:   tr.VisitorConfig,
+			ObservedDesired: tr.ObservedDesired,
+			Topic:           tr.Topic,
+		}
+		payload, err := td.GetPayLoad()
+		if err != nil {
+			klog.Errorf("DeviceReporter GetPayLoad %s/%s: %v", dr.DeviceName, tr.Name, err)
+			continue
+		}
+		var msg common.DeviceTwinUpdate
+		if err = json.Unmarshal(payload, &msg); err != nil {
+			klog.Errorf("DeviceReporter unmarshal %s/%s: %v", dr.DeviceName, tr.Name, err)
+			continue
+		}
+		grpcTwins := parse.ConvMsgTwinToGrpc(msg.Twin)
+		allTwins = append(allTwins, grpcTwins...)
+	}
+
+	if len(allTwins) == 0 {
+		return
+	}
+
+	rdsr := &dmiapi.ReportDeviceStatusRequest{
+		DeviceName:      dr.DeviceName,
+		DeviceNamespace: dr.DeviceNamespace,
+		ReportedDevice: &dmiapi.DeviceStatus{
+			Twins: allTwins,
+		},
+	}
+	if err := grpcclient.ReportDeviceStatus(rdsr); err != nil {
+		klog.Errorf("fail to report device status of %s with err: %+v", dr.DeviceName, err)
 	}
 }

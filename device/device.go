@@ -81,6 +81,7 @@ func (d *DevPanel) DevStart() {
 // start initialises the protocol client and launches the data handler for a single device.
 func (d *DevPanel) start(ctx context.Context, dev *driver.CustomizedDev) {
 	defer d.wg.Done()
+	klog.Infof("[DIAG] start: device=%s deviceID=%s", dev.Instance.Name, dev.Instance.ID)
 
 	var protocolConfig driver.ProtocolConfig
 	if err := json.Unmarshal(dev.Instance.PProtocol.ConfigData, &protocolConfig); err != nil {
@@ -97,12 +98,14 @@ func (d *DevPanel) start(ctx context.Context, dev *driver.CustomizedDev) {
 		klog.Errorf("Init device %s error: %v", dev.Instance.ID, err)
 		return
 	}
+	klog.Infof("[DIAG] start: InitDevice OK device=%s, launching dataHandler", dev.Instance.ID)
 	go dataHandler(ctx, dev)
 	<-ctx.Done()
 }
 
 // dataHandler sets up TwinData and optional push-method goroutines for each device property.
 func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
+	klog.Infof("[DIAG] dataHandler: device=%s deviceID=%s twinCount=%d", dev.Instance.Name, dev.Instance.ID, len(dev.Instance.Twins))
 	getStates := &DeviceStates{
 		Client:          dev.CustomizedClient,
 		DeviceName:      dev.Instance.Name,
@@ -111,6 +114,9 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		ReportCycle:     time.Millisecond * time.Duration(dev.Instance.Status.ReportCycle),
 	}
 	go getStates.Run(ctx)
+
+	var reportTwins []TwinReporter
+	var reportCycle time.Duration
 
 	for _, twin := range dev.Instance.Twins {
 		if twin.Property == nil || twin.Property.PProperty.DataType == "" {
@@ -130,19 +136,19 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			continue
 		}
 
-		twinData := &TwinData{
-			DeviceName:      dev.Instance.Name,
-			DeviceNamespace: dev.Instance.Namespace,
-			Client:          dev.CustomizedClient,
-			Name:            twin.PropertyName,
-			Type:            twin.Property.PProperty.DataType,
-			ObservedDesired: twin.ObservedDesired,
-			VisitorConfig:   &visitorConfig,
-			Topic:           fmt.Sprintf(common.TopicTwinUpdate, dev.Instance.ID),
-			CollectCycle:    time.Millisecond * time.Duration(twin.Property.CollectCycle),
-			ReportToCloud:   twin.Property.ReportToCloud,
+		// Collect twins that report to cloud for batched status reporting.
+		if twin.Property.ReportToCloud {
+			reportTwins = append(reportTwins, TwinReporter{
+				Name:            twin.PropertyName,
+				Type:            twin.Property.PProperty.DataType,
+				ObservedDesired: twin.ObservedDesired,
+				VisitorConfig:   &visitorConfig,
+				Topic:           fmt.Sprintf(common.TopicTwinUpdate, dev.Instance.ID),
+			})
+			if cycle := time.Millisecond * time.Duration(twin.Property.CollectCycle); cycle > 0 && (reportCycle == 0 || cycle < reportCycle) {
+				reportCycle = cycle
+			}
 		}
-		go twinData.Run(ctx)
 
 		dataModel := common.NewDataModel(
 			dev.Instance.Name,
@@ -153,6 +159,11 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		if twin.Property.PushMethod.MethodConfig != nil && twin.Property.PushMethod.MethodName != "" {
 			pushHandler(ctx, &twin, dev.CustomizedClient, &visitorConfig, dataModel)
 		}
+	}
+
+	if len(reportTwins) > 0 {
+		dr := NewDeviceReporter(dev, reportTwins, reportCycle)
+		go dr.Run(ctx)
 	}
 }
 
@@ -271,6 +282,7 @@ func (d *DevPanel) DevInit(deviceList []*dmiapi.Device, deviceModelList []*dmiap
 
 // UpdateDev stops the old device and starts the updated one.
 func (d *DevPanel) UpdateDev(model *common.DeviceModel, device *common.DeviceInstance) {
+	klog.Infof("[DIAG] UpdateDev called: deviceID=%s modelID=%s twinCount=%d", device.ID, model.ID, len(device.Twins))
 	d.serviceMutex.Lock()
 	defer d.serviceMutex.Unlock()
 
@@ -380,6 +392,7 @@ func (d *DevPanel) WriteDevice(deviceMethodName, deviceID, propertyName, data st
 }
 
 func (d *DevPanel) stopDev(dev *driver.CustomizedDev, id string) error {
+	klog.Infof("[DIAG] stopDev: deviceID=%s", id)
 	cancelFunc, ok := d.deviceMuxs[id]
 	if !ok {
 		return fmt.Errorf("can not find device %s from device muxs", id)
