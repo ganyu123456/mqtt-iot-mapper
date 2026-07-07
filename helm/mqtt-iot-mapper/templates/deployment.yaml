@@ -15,6 +15,14 @@ spec:
       labels:
         {{- include "mqtt-iot-mapper.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.nodeName }}
+      nodeName: {{ .Values.nodeName }}
+      {{- end }}
+
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
 
       {{- with .Values.tolerations }}
       tolerations:
