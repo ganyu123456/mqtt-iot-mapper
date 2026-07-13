@@ -1,0 +1,175 @@
+[
+  {
+    "groupKey": "image",
+    "label": "镜像配置",
+    "icon": "🐳",
+    "description": "容器镜像地址、版本及拉取策略",
+    "fields": [
+      {
+        "key": "repository",
+        "label": "镜像仓库地址",
+        "type": "string",
+        "required": true,
+        "defaultValue": "harbor.zkjgy.online/library/mqtt-iot-mapper",
+        "yamlPath": "image.repository",
+        "placeholder": "如 harbor.zkjgy.online/library/mqtt-iot-mapper",
+        "span": 24
+      },
+      {
+        "key": "tag",
+        "label": "镜像版本",
+        "type": "string",
+        "defaultValue": "latest",
+        "yamlPath": "image.tag",
+        "placeholder": "如 latest、v1.0.0",
+        "span": 12
+      },
+      {
+        "key": "pullPolicy",
+        "label": "镜像拉取策略",
+        "type": "select",
+        "defaultValue": "IfNotPresent",
+        "yamlPath": "image.pullPolicy",
+        "description": "IfNotPresent：本地有则用本地；Always：每次都拉取最新；Never：仅使用本地镜像",
+        "options": [
+          { "label": "IfNotPresent - 本地有则用本地", "value": "IfNotPresent" },
+          { "label": "Always - 每次都拉取最新", "value": "Always" },
+          { "label": "Never - 仅使用本地镜像", "value": "Never" }
+        ],
+        "span": 12
+      }
+    ]
+  },
+  {
+    "groupKey": "scheduling",
+    "label": "边缘节点调度",
+    "icon": "🖥️",
+    "description": "KubeEdge 边缘节点的调度策略与网络模式",
+    "fields": [
+      {
+        "key": "hostNetwork",
+        "label": "使用主机网络",
+        "type": "boolean",
+        "defaultValue": true,
+        "yamlPath": "hostNetwork",
+        "description": "mapper 需访问 edgecore dmi.sock，必须开启 hostNetwork",
+        "span": 12
+      },
+      {
+        "key": "dnsPolicy",
+        "label": "DNS 策略",
+        "type": "select",
+        "defaultValue": "ClusterFirstWithHostNet",
+        "yamlPath": "dnsPolicy",
+        "description": "使用主机网络时推荐 ClusterFirstWithHostNet",
+        "options": [
+          { "label": "ClusterFirstWithHostNet", "value": "ClusterFirstWithHostNet" },
+          { "label": "ClusterFirst", "value": "ClusterFirst" },
+          { "label": "Default", "value": "Default" },
+          { "label": "None", "value": "None" }
+        ],
+        "span": 12
+      }
+    ]
+  },
+  {
+    "groupKey": "resources",
+    "label": "资源限制",
+    "icon": "💾",
+    "description": "容器 CPU 与内存的资源申请值及上限",
+    "fields": [
+      {
+        "key": "requestsCpu",
+        "label": "CPU 申请值",
+        "type": "string",
+        "defaultValue": "500m",
+        "yamlPath": "resources.requests.cpu",
+        "placeholder": "如 200m、500m、1",
+        "span": 12
+      },
+      {
+        "key": "requestsMemory",
+        "label": "内存申请值",
+        "type": "string",
+        "defaultValue": "512Mi",
+        "yamlPath": "resources.requests.memory",
+        "placeholder": "如 256Mi、512Mi、1Gi",
+        "span": 12
+      },
+      {
+        "key": "limitsCpu",
+        "label": "CPU 上限",
+        "type": "string",
+        "defaultValue": "1000m",
+        "yamlPath": "resources.limits.cpu",
+        "placeholder": "如 1000m、2",
+        "span": 12
+      },
+      {
+        "key": "limitsMemory",
+        "label": "内存上限",
+        "type": "string",
+        "defaultValue": "1024Mi",
+        "yamlPath": "resources.limits.memory",
+        "placeholder": "如 512Mi、1Gi、2Gi",
+        "span": 12
+      }
+    ]
+  },
+  {
+    "groupKey": "mapper",
+    "label": "Mapper 核心配置",
+    "icon": "🔌",
+    "description": "设备映射器的 gRPC 服务与通用参数",
+    "fields": [
+      {
+        "key": "logLevel",
+        "label": "日志级别",
+        "type": "select",
+        "defaultValue": "4",
+        "yamlPath": "logLevel",
+        "description": "4=Debug，2=Info，0=Error",
+        "options": [
+          { "label": "4 - Debug（调试）", "value": "4" },
+          { "label": "2 - Info（信息）", "value": "2" },
+          { "label": "0 - Error（错误）", "value": "0" }
+        ],
+        "span": 12
+      },
+      {
+        "key": "socketPath",
+        "label": "gRPC Socket 路径",
+        "type": "string",
+        "defaultValue": "/etc/kubeedge/mqtt-iot-mapper.sock",
+        "yamlPath": "mapperConfig.grpc_server.socket_path",
+        "description": "mapper 暴露给 edgecore 的 Unix Domain Socket 路径",
+        "span": 24
+      },
+      {
+        "key": "protocol",
+        "label": "协议名称",
+        "type": "string",
+        "defaultValue": "mqtt-iot-mapper",
+        "yamlPath": "mapperConfig.common.protocol",
+        "span": 12
+      },
+      {
+        "key": "edgecoreSock",
+        "label": "EdgeCore DMI Socket",
+        "type": "string",
+        "defaultValue": "/etc/kubeedge/dmi.sock",
+        "yamlPath": "mapperConfig.common.edgecore_sock",
+        "description": "edgecore 暴露的 DMI 接口 socket 路径",
+        "span": 12
+      },
+      {
+        "key": "address",
+        "label": "绑定地址",
+        "type": "string",
+        "defaultValue": "127.0.0.1",
+        "yamlPath": "mapperConfig.common.address",
+        "span": 12
+      }
+    ]
+  }
+]
