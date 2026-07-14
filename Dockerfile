@@ -23,6 +23,8 @@ RUN apk add --no-cache ca-certificates tzdata \
       iputils \
       busybox-extras
 
+ENV TZ=Asia/Shanghai
+
 COPY --from=builder /build/main .
 
 EXPOSE 7777
