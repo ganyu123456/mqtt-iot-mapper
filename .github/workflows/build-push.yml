@@ -17,19 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
-      is_tag:  ${{ steps.meta.outputs.is_tag }}
     steps:
       - id: meta
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            V="${GITHUB_REF#refs/tags/v}"
-            echo "version=$V" >> $GITHUB_OUTPUT
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-          else
-            echo "version=latest" >> $GITHUB_OUTPUT
-            echo "is_tag=false" >> $GITHUB_OUTPUT
-          fi
-          echo "Resolved version: $(cat $GITHUB_OUTPUT)"
+          V="${GITHUB_REF#refs/tags/v}"
+          echo "version=$V" >> $GITHUB_OUTPUT
+          echo "Resolved version: $V"
 
   # ── amd64 镜像 ─────────────────────────────────────────────
   build-amd64:
@@ -58,7 +51,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64
 
       - name: Save image for offline release
-        if: needs.version.outputs.is_tag == 'true'
         run: |
           docker pull --platform linux/amd64 \
             ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64
@@ -70,7 +62,6 @@ jobs:
             | gzip > ${{ env.IMAGE_NAME }}-amd64.tar.gz
 
       - name: Upload amd64 artifact
-        if: needs.version.outputs.is_tag == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: image-amd64
@@ -105,7 +96,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64
 
       - name: Save image for offline release
-        if: needs.version.outputs.is_tag == 'true'
         run: |
           docker pull --platform linux/arm64 \
             ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64
@@ -117,7 +107,6 @@ jobs:
             | gzip > ${{ env.IMAGE_NAME }}-arm64.tar.gz
 
       - name: Upload arm64 artifact
-        if: needs.version.outputs.is_tag == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: image-arm64
@@ -171,7 +160,6 @@ jobs:
           version: v3.14.0
 
       - name: Update chart version and image tag
-        if: needs.version.outputs.is_tag == 'true'
         run: |
           V="${{ needs.version.outputs.version }}"
           CHART="helm/${IMAGE_NAME}/Chart.yaml"
@@ -191,7 +179,6 @@ jobs:
           helm package helm/${{ env.IMAGE_NAME }}
 
       - name: Push to Harbor (OCI)
-        if: needs.version.outputs.is_tag == 'true'
         env:
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
@@ -218,7 +205,6 @@ jobs:
       - build-amd64
       - build-arm64
       - helm-package
-    if: needs.version.outputs.is_tag == 'true'
     permissions:
       contents: write
     steps:
