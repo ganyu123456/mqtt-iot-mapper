@@ -19,9 +19,9 @@
         "key": "tag",
         "label": "镜像版本",
         "type": "string",
-        "defaultValue": "2.6.0",
+        "defaultValue": "2.7.0",
         "yamlPath": "image.tag",
-        "placeholder": "如 2.6.0、v1.0.0",
+        "placeholder": "如 2.7.0、v1.0.0",
         "span": 12
       },
       {
