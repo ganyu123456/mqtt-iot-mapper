@@ -4,7 +4,7 @@
 
 image:
   repository: harbor.zkjgy.online/library/mqtt-iot-mapper
-  tag: latest
+  tag: "2.6.0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:

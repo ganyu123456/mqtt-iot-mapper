@@ -64,8 +64,11 @@ jobs:
         run: |
           docker pull --platform linux/amd64 \
             ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64
+          # 客户平台按文件名区分架构、要求两个异构镜像内部 tag 一致，故去掉架构后缀再保存
+          docker tag ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
           docker save \
-            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-amd64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }} \
             | gzip > ${{ env.IMAGE_NAME }}-amd64.tar.gz
 
       - name: Upload amd64 artifact
@@ -108,8 +111,11 @@ jobs:
         run: |
           docker pull --platform linux/arm64 \
             ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64
+          # 客户平台按文件名区分架构、要求两个异构镜像内部 tag 一致，故去掉架构后缀再保存
+          docker tag ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
           docker save \
-            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-arm64 \
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }} \
             | gzip > ${{ env.IMAGE_NAME }}-arm64.tar.gz
 
       - name: Upload arm64 artifact
@@ -280,9 +286,9 @@ jobs:
           echo -e "${GREEN}  Harbor: ${HARBOR_URL}/${PROJECT}${NC}"
           echo -e "${GREEN}============================================${NC}"
 
-          # ── 1. 加载镜像 ──────────────────────────────────
+          # ── 1. 检查镜像文件 ──────────────────────────────
           echo ""
-          echo "[1/4] Loading Docker images..."
+          echo "[1/4] Checking image files..."
 
           for arch in amd64 arm64; do
             TGZ="${IMAGE}-${arch}.tar.gz"
@@ -290,8 +296,7 @@ jobs:
               echo -e "${RED}Error: $TGZ not found${NC}"
               exit 1
             fi
-            echo "  Loading $TGZ ..."
-            docker load < "$TGZ"
+            echo "  Found $TGZ"
           done
 
           # ── 2. 登录 Harbor ───────────────────────────────
@@ -299,14 +304,16 @@ jobs:
           echo "[2/4] Logging in to ${HARBOR_URL}..."
           echo "$PASSWORD" | docker login "$HARBOR_URL" -u "$USERNAME" --password-stdin
 
-          # ── 3. 推送镜像 ──────────────────────────────────
+          # ── 3. 加载并推送镜像 ────────────────────────────
           echo ""
-          echo "[3/4] Pushing images..."
+          echo "[3/4] Loading & pushing images..."
 
           DST_BASE="${HARBOR_URL}/${PROJECT}/${IMAGE}"
 
           for arch in amd64 arm64; do
-            SRC_TAG="${BASE}/${IMAGE}:${VERSION}-${arch}"
+            # 离线包内镜像 tag 已统一为 :VERSION（无架构后缀），逐个 load 后先打好架构标签再推送
+            docker load < "${IMAGE}-${arch}.tar.gz"
+            SRC_TAG="${BASE}/${IMAGE}:${VERSION}"
             DST_TAG="${DST_BASE}:${VERSION}-${arch}"
             echo "  Pushing ${DST_TAG} ..."
             docker tag "$SRC_TAG" "$DST_TAG"
