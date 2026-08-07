@@ -2,8 +2,6 @@ name: Build and Push
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
 
@@ -155,13 +153,7 @@ jobs:
             "${BASE}:${V}-amd64" \
             "${BASE}:${V}-arm64"
 
-          # 更新 latest manifest
-          docker buildx imagetools create \
-            --tag "${BASE}:latest" \
-            "${BASE}:${V}-amd64" \
-            "${BASE}:${V}-arm64"
-
-          echo "Manifest ${BASE}:${V} and ${BASE}:latest created"
+          echo "Manifest ${BASE}:${V} created"
 
   # ── Helm 打包 & 推送 ───────────────────────────────────────
   helm-package:
@@ -327,11 +319,6 @@ jobs:
             "${DST_BASE}:${VERSION}-amd64" \
             "${DST_BASE}:${VERSION}-arm64"
           docker manifest push --purge "${DST_BASE}:${VERSION}"
-
-          docker manifest create --amend "${DST_BASE}:latest" \
-            "${DST_BASE}:${VERSION}-amd64" \
-            "${DST_BASE}:${VERSION}-arm64"
-          docker manifest push --purge "${DST_BASE}:latest"
 
           # ── Helm ─────────────────────────────────────────
           echo ""
