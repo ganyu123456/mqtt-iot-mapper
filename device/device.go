@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+
+	"github.com/kubeedge/mqtt-iot-mapper/util"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +22,36 @@ import (
 	mqttMethod "github.com/kubeedge/mqtt-iot-mapper/data/publish/mqtt"
 	"github.com/kubeedge/mqtt-iot-mapper/driver"
 )
+
+// reconcileLogger writes persistent reconcile events to a hostPath file.
+var reconcileLogger *util.FileLogger
+
+// persistLog writes a formatted line to the persistent reconcile log file.
+func persistLog(format string, args ...interface{}) {
+	if l := getReconcileLogger(); l != nil {
+		l.Write(format, args...)
+	}
+}
+
+func getReconcileLogger() *util.FileLogger {
+	if reconcileLogger != nil {
+		return reconcileLogger
+	}
+	cfg := util.FileLoggerConfig{
+		Path:       util.EnvOrDefault("RECONCILE_LOG_PATH", "/etc/kubeedge/mapper-reconcile.log"),
+		MaxSizeMB:  util.EnvIntOrDefault("LOG_MAX_SIZE_MB", 10),
+		MaxBackups: util.EnvIntOrDefault("LOG_MAX_BACKUPS", 30),
+	}
+	l, err := util.NewFileLogger(cfg)
+	if err != nil {
+		klog.Warningf("cannot create reconcile logger: %v", err)
+		return nil
+	}
+	reconcileLogger = l
+	klog.Infof("reconcile logger: %s (maxSize=%dMB maxBackups=%d)",
+		cfg.Path, cfg.MaxSizeMB, cfg.MaxBackups)
+	return l
+}
 
 // DevPanel is the central device management structure.
 type DevPanel struct {
@@ -96,6 +128,13 @@ func (d *DevPanel) start(ctx context.Context, dev *driver.CustomizedDev) {
 	dev.CustomizedClient = client
 	if err = dev.CustomizedClient.InitDevice(); err != nil {
 		klog.Errorf("Init device %s error: %v", dev.Instance.ID, err)
+		go (&DeviceStates{
+			Client:          dev.CustomizedClient,
+			DeviceName:      dev.Instance.Name,
+			DeviceNamespace: dev.Instance.Namespace,
+			ReportToCloud:   true,
+		}).Run(ctx)
+		<-ctx.Done()
 		return
 	}
 	klog.Infof("[DIAG] start: InitDevice OK device=%s, launching dataHandler", dev.Instance.ID)
@@ -164,6 +203,125 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 	if len(reportTwins) > 0 {
 		dr := NewDeviceReporter(dev, reportTwins, reportCycle)
 		go dr.Run(ctx)
+	}
+
+	go startReconcileLoop(ctx, dev)
+}
+
+// startReconcileLoop periodically compares Device Twin desired values against
+// the corresponding MQTT status fields. When a mismatch is found the desired
+// value is resent as a single-field cmd message.
+func startReconcileLoop(ctx context.Context, dev *driver.CustomizedDev) {
+	const (
+		cooldown   = 30 * time.Second
+		maxRetries = 3
+	)
+
+
+	deviceID := dev.Instance.ID
+	persistLog("[RECONCILE] started deviceID=%s interval=5s cooldown=%v maxRetries=%d",
+		deviceID, cooldown, maxRetries)
+	klog.Infof("[RECONCILE] loop started device=%s interval=5s cooldown=%v maxRetries=%d",
+		deviceID, cooldown, maxRetries)
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	type retryState struct {
+		sentAt     time.Time
+		retryCount int
+	}
+	lastSent := make(map[string]*retryState)
+
+	for {
+		select {
+		case <-ticker.C:
+			for i := range dev.Instance.Twins {
+				twin := &dev.Instance.Twins[i]
+				if twin.Property == nil || twin.Property.PProperty.AccessMode == "ReadOnly" {
+					continue
+				}
+				if twin.ObservedDesired.Value == "" {
+					continue
+				}
+
+				var visitorConfig driver.VisitorConfig
+				if err := json.Unmarshal(twin.Property.Visitors, &visitorConfig); err != nil {
+					klog.Warningf("[RECONCILE] field=%s unmarshal visitorConfig failed: %v", twin.PropertyName, err)
+					persistLog("[RECONCILE] ERROR field=%s unmarshalVisitorConfig: %v", twin.PropertyName, err)
+					continue
+				}
+
+				actualValue, err := dev.CustomizedClient.GetDeviceData(&visitorConfig)
+				if err != nil {
+					klog.Warningf("[RECONCILE] field=%s GetDeviceData failed: %v", twin.PropertyName, err)
+					persistLog("[RECONCILE] ERROR field=%s GetDeviceData: %v", twin.PropertyName, err)
+					continue
+				}
+				actualStr, _ := actualValue.(string)
+
+				if twin.ObservedDesired.Value != actualStr {
+					rs := lastSent[twin.PropertyName]
+
+					// Already exhausted retries: wait for state convergence or Twin change.
+					if rs != nil && rs.retryCount >= maxRetries {
+						klog.V(2).Infof("[RECONCILE] field=%s retries exhausted (%d/%d), giving up",
+							twin.PropertyName, rs.retryCount, maxRetries)
+						continue
+					}
+
+					// Within cooldown window.
+					if rs != nil && time.Since(rs.sentAt) < cooldown {
+						klog.V(4).Infof("[RECONCILE] field=%s in cooldown (sent %v ago), skipped",
+							twin.PropertyName, time.Since(rs.sentAt).Round(time.Second))
+						continue
+					}
+
+					attempt := 1
+					if rs != nil {
+						attempt = rs.retryCount + 1
+					}
+
+					msg := fmt.Sprintf("[RECONCILE] field=%s desired=%s actual=%s → resending (attempt %d/%d)",
+						twin.PropertyName, twin.ObservedDesired.Value, actualStr, attempt, maxRetries)
+					klog.Info(msg)
+					persistLog(msg)
+
+					if err := setVisitor(&visitorConfig, twin, dev); err != nil {
+						errMsg := fmt.Sprintf("[RECONCILE] ERROR field=%s sendCmd failed: %v", twin.PropertyName, err)
+						klog.Error(errMsg)
+						persistLog(errMsg)
+					} else {
+						if rs == nil {
+							lastSent[twin.PropertyName] = &retryState{sentAt: time.Now(), retryCount: 1}
+						} else {
+							rs.sentAt = time.Now()
+							rs.retryCount++
+
+							if rs.retryCount >= maxRetries {
+								warnMsg := fmt.Sprintf("[RECONCILE] field=%s retries exhausted (%d/%d) – will not retry until state converges or Twin changes",
+									twin.PropertyName, rs.retryCount, maxRetries)
+								klog.Warning(warnMsg)
+								persistLog(warnMsg)
+							}
+						}
+					}
+				} else {
+					// Value converged → reset retry state.
+					if _, hadPending := lastSent[twin.PropertyName]; hadPending {
+						recoverMsg := fmt.Sprintf("[RECONCILE] field=%s converged desired=%s actual=%s – retry state reset",
+							twin.PropertyName, twin.ObservedDesired.Value, actualStr)
+						klog.Info(recoverMsg)
+						persistLog(recoverMsg)
+					}
+					delete(lastSent, twin.PropertyName)
+				}
+			}
+		case <-ctx.Done():
+			persistLog("[RECONCILE] loop stopped deviceID=%s", deviceID)
+			klog.Infof("[RECONCILE] loop stopped device=%s", deviceID)
+			return
+		}
 	}
 }
 

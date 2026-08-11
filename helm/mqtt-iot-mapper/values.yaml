@@ -2,8 +2,10 @@
 # mqtt-iot-mapper Helm Chart 默认配置
 # ============================================================
 
+replicas: 1
+
 image:
-  repository: harbor.zkjgy.online/library/mqtt-iot-mapper
+  repository: 10.253.3.91:30550/library/mqtt-iot-mapper
   tag: "2.8.0"
   pullPolicy: IfNotPresent
 
@@ -31,6 +33,33 @@ resources:
 
 # 日志级别：4=Debug, 2=Info
 logLevel: "4"
+
+# ── 启动前清理残留 socket 文件 ───────────────────────────
+initContainer:
+  enabled: true
+
+# ── 存活探针（检查 gRPC socket 是否存在）─────────────────
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+# ── Reconcile Loop 调谐循环 ────────────────────────────────
+reconcile:
+  cooldownSeconds: 30
+  maxRetries: 3
+
+# ── 日志文件持久化（hostPath 挂载到节点本地路径）─────────
+# 日志文件通过 hostPath 挂载写入边缘节点，支持按大小自动轮转。
+# 日志级别：4=Debug, 2=Info
+logFile:
+  enabled: true
+  hostPath: /opt/mqtt-iot-mapper/logs          # 边缘节点本地日志目录（部署前需 mkdir）
+  mountPath: /logs                              # 容器内挂载路径
+  fileSizeLimitMB: 10                           # 单个日志文件最大 MB（超出自动轮转）
+  retainedFileCountLimit: 30                     # 最多保留的日志文件数（超出自动删除旧文件）
+  reconcileLogName: mapper-reconcile.log         # Reconcile Loop 事件日志文件名
+  gatewayLogName: mapper-gateway.log             # MQTT 连接事件日志文件名
 
 # ── mapper config.yaml 内容（挂载到 /tmp/config.yaml）─────
 mapperConfig:

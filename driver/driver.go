@@ -100,7 +100,7 @@ func (c *CustomizedClient) GetDeviceStates() (string, error) {
 	c.deviceMutex.Lock()
 	defer c.deviceMutex.Unlock()
 
-	if c.Gateway == nil {
+	if c.Gateway == nil || !c.Gateway.IsConnected() {
 		return common.DeviceStatusUnknown, nil
 	}
 	return common.DeviceStatusOK, nil

@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "mqtt-iot-mapper.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       {{- include "mqtt-iot-mapper.selectorLabels" . | nindent 6 }}
@@ -37,6 +37,23 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
+      {{- if .Values.initContainer.enabled }}
+      initContainers:
+        - name: cleanup-sock
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Cleaning up stale socket files..."
+              rm -f /etc/kubeedge/mqtt-iot-mapper.sock
+              echo "Cleanup done."
+          volumeMounts:
+            - name: kubeedge-sock
+              mountPath: /etc/kubeedge
+      {{- end }}
+
       containers:
         - name: mapper
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -45,12 +62,43 @@ spec:
           args:
             - /kubeedge/main --config-file /tmp/config.yaml --v {{ .Values.logLevel }}
 
+          env:
+            - name: RECONCILE_COOLDOWN_SECONDS
+              value: {{ .Values.reconcile.cooldownSeconds | quote }}
+            - name: RECONCILE_MAX_RETRIES
+              value: {{ .Values.reconcile.maxRetries | quote }}
+            {{- if .Values.logFile.enabled }}
+            - name: RECONCILE_LOG_PATH
+              value: "{{ .Values.logFile.mountPath }}/{{ .Values.logFile.reconcileLogName }}"
+            - name: GATEWAY_LOG_PATH
+              value: "{{ .Values.logFile.mountPath }}/{{ .Values.logFile.gatewayLogName }}"
+            - name: LOG_MAX_SIZE_MB
+              value: {{ .Values.logFile.fileSizeLimitMB | quote }}
+            - name: LOG_MAX_BACKUPS
+              value: {{ .Values.logFile.retainedFileCountLimit | quote }}
+            {{- end }}
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -S /etc/kubeedge/mqtt-iot-mapper.sock
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          {{- end }}
 
           volumeMounts:
             - name: kubeedge-sock
               mountPath: /etc/kubeedge
+            {{- if .Values.logFile.enabled }}
+            - name: mapper-logs
+              mountPath: {{ .Values.logFile.mountPath }}
+            {{- end }}
             - name: mapper-config
               mountPath: /tmp
 
@@ -59,6 +107,12 @@ spec:
           hostPath:
             path: /etc/kubeedge
             type: Directory
+        {{- if .Values.logFile.enabled }}
+        - name: mapper-logs
+          hostPath:
+            path: {{ .Values.logFile.hostPath }}
+            type: DirectoryOrCreate
+        {{- end }}
         - name: mapper-config
           configMap:
             name: {{ include "mqtt-iot-mapper.configmapName" . }}

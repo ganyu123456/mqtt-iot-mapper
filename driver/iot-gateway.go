@@ -9,7 +9,38 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"k8s.io/klog/v2"
+
+	"github.com/kubeedge/mqtt-iot-mapper/util"
 )
+
+// gatewayLogger writes persistent MQTT connection events to a hostPath file.
+var gatewayLogger *util.FileLogger
+
+func getGatewayLogger() *util.FileLogger {
+	if gatewayLogger != nil {
+		return gatewayLogger
+	}
+	cfg := util.FileLoggerConfig{
+		Path:       util.EnvOrDefault("GATEWAY_LOG_PATH", "/etc/kubeedge/mapper-gateway.log"),
+		MaxSizeMB:  util.EnvIntOrDefault("LOG_MAX_SIZE_MB", 10),
+		MaxBackups: util.EnvIntOrDefault("LOG_MAX_BACKUPS", 30),
+	}
+	l, err := util.NewFileLogger(cfg)
+	if err != nil {
+		klog.Warningf("cannot create gateway logger: %v", err)
+		return nil
+	}
+	gatewayLogger = l
+	klog.Infof("gateway logger: %s (maxSize=%dMB maxBackups=%d)",
+		cfg.Path, cfg.MaxSizeMB, cfg.MaxBackups)
+	return l
+}
+
+func gatewayPersistLog(format string, args ...interface{}) {
+	if l := getGatewayLogger(); l != nil {
+		l.Write(format, args...)
+	}
+}
 
 // statusMessage matches the JSON published by devices to device/{deviceId}/status.
 type statusMessage struct {
@@ -52,7 +83,10 @@ func NewIoTGateway(cfg ConfigData, state *IoTDeviceState) *IoTGateway {
 
 // Start connects to the MQTT broker and subscribes to the status topic.
 func (g *IoTGateway) Start() error {
-	if err := g.connect(); err != nil {
+if err := g.connect(); err != nil {
+		errMsg := fmt.Sprintf("IoTGateway[%s] connect failed: %v", g.cfg.DeviceID, err)
+		klog.Error(errMsg)
+		gatewayPersistLog(errMsg)
 		return fmt.Errorf("connect to MQTT broker %s: %w", g.cfg.MQTTBroker, err)
 	}
 
@@ -60,7 +94,9 @@ func (g *IoTGateway) Start() error {
 		return fmt.Errorf("subscribe status topic: %w", err)
 	}
 
-	klog.Infof("IoTGateway[%s] started | broker=%s", g.cfg.DeviceID, g.cfg.MQTTBroker)
+	startMsg := fmt.Sprintf("IoTGateway[%s] started | broker=%s", g.cfg.DeviceID, g.cfg.MQTTBroker)
+	klog.Info(startMsg)
+	gatewayPersistLog(startMsg)
 	return nil
 }
 
@@ -70,12 +106,19 @@ func (g *IoTGateway) Stop() {
 	if g.mqttClient != nil && g.mqttClient.IsConnected() {
 		g.mqttClient.Disconnect(500)
 	}
-	klog.Infof("IoTGateway[%s] stopped", g.cfg.DeviceID)
+	stopMsg := fmt.Sprintf("IoTGateway[%s] stopped", g.cfg.DeviceID)
+	klog.Info(stopMsg)
+	gatewayPersistLog(stopMsg)
 }
 
 // GetProperty returns the latest reported value for a device property field.
 func (g *IoTGateway) GetProperty(fieldName string) string {
 	return g.state.Get(fieldName)
+}
+
+// IsConnected returns true when the MQTT client is connected to the broker.
+func (g *IoTGateway) IsConnected() bool {
+	return g.mqttClient != nil && g.mqttClient.IsConnected()
 }
 
 // SendCmd generates a cmd message and publishes it to device/{deviceId}/cmd.
@@ -107,8 +150,10 @@ func (g *IoTGateway) SendCmd(fieldName string, value interface{}) error {
 		return token.Error()
 	}
 
-	klog.Infof("IoTGateway[%s]: sent cmd | requestId=%s field=%s value=%v",
+	cmdMsg := fmt.Sprintf("IoTGateway[%s]: sent cmd | requestId=%s field=%s value=%v",
 		g.cfg.DeviceID, requestID, fieldName, value)
+	klog.Info(cmdMsg)
+	gatewayPersistLog(cmdMsg)
 	return nil
 }
 
@@ -141,11 +186,30 @@ func (g *IoTGateway) connect() error {
 	}
 
 	g.mqttClient = mqtt.NewClient(opts)
-	token := g.mqttClient.Connect()
-	if !token.WaitTimeout(10 * time.Second) {
-		return fmt.Errorf("connect timeout")
+
+	const (
+		maxAttempts = 10
+		maxBackoff  = 30 * time.Second
+	)
+	backoff := 1 * time.Second
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		token := g.mqttClient.Connect()
+		if token.WaitTimeout(10*time.Second) && token.Error() == nil {
+			return nil
+		}
+		if attempt < maxAttempts-1 {
+			klog.Warningf("IoTGateway[%s]: MQTT connect attempt %d/%d failed, retrying in %v",
+				g.cfg.DeviceID, attempt+1, maxAttempts, backoff)
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
-	return token.Error()
+
+	return fmt.Errorf("connect timeout after %d attempts", maxAttempts)
 }
 
 
@@ -158,7 +222,9 @@ func (g *IoTGateway) subscribeStatus() error {
 	if token.Error() != nil {
 		return token.Error()
 	}
-	klog.Infof("IoTGateway[%s]: subscribed status → %s", g.cfg.DeviceID, topic)
+	subMsg := fmt.Sprintf("IoTGateway[%s]: subscribed status → %s", g.cfg.DeviceID, topic)
+	klog.Info(subMsg)
+	gatewayPersistLog(subMsg)
 	return nil
 }
 
@@ -169,7 +235,9 @@ func (g *IoTGateway) handleStatus(_ mqtt.Client, msg mqtt.Message) {
 	dec := json.NewDecoder(bytes.NewReader(msg.Payload()))
 	dec.UseNumber()
 	if err := dec.Decode(&sm); err != nil {
-		klog.Errorf("IoTGateway[%s]: unmarshal status failed: %v", g.cfg.DeviceID, err)
+		parseErr := fmt.Sprintf("IoTGateway[%s]: unmarshal status failed: %v", g.cfg.DeviceID, err)
+		klog.Error(parseErr)
+		gatewayPersistLog(parseErr)
 		return
 	}
 
