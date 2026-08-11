@@ -10,9 +10,9 @@
         "label": "镜像仓库地址",
         "type": "string",
         "required": true,
-        "defaultValue": "harbor.zkjgy.online/library/mqtt-iot-mapper",
+        "defaultValue": "10.253.3.91:30550/library/mqtt-iot-mapper",
         "yamlPath": "image.repository",
-        "placeholder": "如 harbor.zkjgy.online/library/mqtt-iot-mapper",
+        "placeholder": "如 10.253.3.91:30550/library/mqtt-iot-mapper",
         "span": 24
       },
       {

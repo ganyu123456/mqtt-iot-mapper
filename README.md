@@ -269,7 +269,7 @@ go build -o mqtt-iot-mapper ./cmd/main.go
 `.drone.yml` 自动完成 `linux/amd64` + `linux/arm64` 双架构镜像构建及 Helm Chart 推送：
 
 ```
-harbor.zkjgy.online/library/mqtt-iot-mapper:2.8.0
+10.253.3.91:30550/library/mqtt-iot-mapper:2.8.0
 ```
 
 > **注意**：Dockerfile 中已内置 `go mod tidy`，CI 构建无需预先生成 `go.sum`。
