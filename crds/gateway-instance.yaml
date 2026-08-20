@@ -16,8 +16,8 @@ spec:
       mqttBroker: "tcp://192.168.122.212:1884"
       # 设备唯一标识，决定 MQTT 主题：device/gateway-001/status|cmd
       deviceId: "gateway-001"
-      mqttUsername: ""
-      mqttPassword: ""
+      mqttUsername: "sys"
+      mqttPassword: "Luculent1!"
       mqttClientId: "mapper-gateway-001"
 
   properties:

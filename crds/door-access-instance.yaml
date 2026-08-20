@@ -14,8 +14,8 @@ spec:
     configData:
       mqttBroker: "tcp://192.168.122.212:1884"
       deviceId: "door-access-001"
-      mqttUsername: ""
-      mqttPassword: ""
+      mqttUsername: "sys"
+      mqttPassword: "Luculent1!"
       mqttClientId: "mapper-door-access-001"
 
   properties:
