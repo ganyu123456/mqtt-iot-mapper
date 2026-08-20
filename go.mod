@@ -6,9 +6,10 @@ toolchain go1.23.3
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.2.0
+	github.com/go-logr/zapr v1.3.0
 	github.com/kubeedge/api v1.21.0
 	github.com/kubeedge/mapper-framework v1.21.0
-	github.com/spf13/cast v1.9.2
+	go.uber.org/zap v1.27.0
 	k8s.io/klog/v2 v2.120.1
 )
 
@@ -18,6 +19,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

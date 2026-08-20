@@ -2,7 +2,11 @@ package main
 
 import (
 	"errors"
+	"os"
 
+	"github.com/go-logr/zapr"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/klog/v2"
 
 	"github.com/kubeedge/mapper-framework/pkg/common"
@@ -16,6 +20,9 @@ import (
 func main() {
 	klog.InitFlags(nil)
 	defer klog.Flush()
+
+	// 桥接 klog 到 zap，输出平台规范的 JSON 日志（level 字段 + 大写枚举）
+	klog.SetLogger(zapr.NewLogger(buildLogger()))
 
 	c, err := config.Parse()
 	if err != nil {
@@ -52,4 +59,22 @@ func main() {
 	if err = grpcServer.Start(); err != nil {
 		klog.Fatal(err)
 	}
+}
+
+// buildLogger 构建符合平台日志规范的 JSON logger。
+// 字段：time / level（大写 TRACE|DEBUG|INFO|WARN|ERROR|FATAL）/ message
+func buildLogger() *zap.Logger {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "time"
+	encoderCfg.LevelKey = "level"
+	encoderCfg.MessageKey = "message"
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05.000")
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.Lock(os.Stdout),
+		zapcore.InfoLevel,
+	)
+	return zap.New(core)
 }
