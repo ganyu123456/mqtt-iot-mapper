@@ -76,5 +76,5 @@ func buildLogger() *zap.Logger {
 		zapcore.Lock(os.Stdout),
 		zapcore.InfoLevel,
 	)
-	return zap.New(core)
+	return zap.New(core).With(zap.String("service", "mqtt-iot-mapper"))
 }

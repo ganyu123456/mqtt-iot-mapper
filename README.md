@@ -183,7 +183,7 @@ kubectl apply -f resource/deployment.yaml
 ```bash
 # 创建镜像仓库凭证
 kubectl create secret docker-registry harbor-secret \
-  --docker-server=harbor.zkjgy.online \
+  --docker-server=10.253.3.91:30550 \
   --docker-username=<用户名> \
   --docker-password=<密码> \
   -n <命名空间>

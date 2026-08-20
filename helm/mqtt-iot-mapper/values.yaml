@@ -6,7 +6,7 @@ replicas: 1
 
 image:
   repository: 10.253.3.91:30550/library/mqtt-iot-mapper
-  tag: "2.8.0"
+  tag: "2.11.0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
